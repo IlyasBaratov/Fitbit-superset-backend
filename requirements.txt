@@ -1,0 +1,6 @@
+requests
+schedule
+pytz
+influxdb
+influxdb-client
+influxdb-client-3
