@@ -51,7 +51,7 @@ The included `compose.yml` runs the Fitbit data fetcher, InfluxDB 1.11, and Graf
 | InfluxDB | `http://localhost:8086` |
 | Grafana | `http://localhost:3000` |
 
-Fitbit OAuth values are read from the project `.env`. Runtime logs, OAuth tokens, InfluxDB data, and Grafana data are persisted in ignored project folders.
+Provider OAuth values are read from the project `.env`. Runtime logs, OAuth tokens, InfluxDB data, and Grafana data are persisted in ignored project folders.
 
 Pull the images and start the database and dashboard:
 
@@ -61,7 +61,7 @@ docker compose up -d influxdb grafana
 docker compose ps
 ```
 
-On the first Fitbit authorization, run the fetcher interactively and enter a valid Fitbit refresh token when prompted:
+On the first authorization, run the fetcher interactively and enter a valid refresh token for the configured `HEALTH_API_PROVIDER` when prompted:
 
 ```bash
 docker compose run --rm fitbit-fetch-data
