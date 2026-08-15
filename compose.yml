@@ -1,0 +1,75 @@
+name: fitbit-superset-backend
+
+services:
+  fitbit-fetch-data:
+    restart: unless-stopped
+    image: thisisarpanghosh/fitbit-fetch-data:latest
+    container_name: fitbit-fetch-data
+    volumes:
+      - ./logs:/app/logs
+      - ./tokens:/app/tokens
+    environment:
+      FITBIT_LOG_FILE_PATH: /app/logs/fitbit.log
+      TOKEN_FILE_PATH: /app/tokens/fitbit.token
+      LOG_LEVEL: "${LOG_LEVEL:-DEBUG}"
+      HEALTH_API_PROVIDER: "${HEALTH_API_PROVIDER:-fitbit}"
+      AUTO_DATE_RANGE: "true"
+      INFLUXDB_VERSION: "1"
+      INFLUXDB_HOST: influxdb
+      INFLUXDB_PORT: "8086"
+      INFLUXDB_USERNAME: fitbit_user
+      INFLUXDB_PASSWORD: fitbit_password
+      INFLUXDB_DATABASE: FitbitHealthStats
+      CLIENT_ID: "${CLIENT_ID}"
+      CLIENT_SECRET: "${CLIENT_SECRET}"
+      DEVICENAME: "${DEVICENAME:-Your_Device_Name}"
+      LOCAL_TIMEZONE: "${LOCAL_TIMEZONE:-Automatic}"
+      TZ: "${TZ:-America/Los_Angeles}"
+    depends_on:
+      influxdb:
+        condition: service_healthy
+
+  influxdb:
+    restart: unless-stopped
+    image: influxdb:1.11
+    container_name: influxdb
+    hostname: influxdb
+    environment:
+      INFLUXDB_DB: FitbitHealthStats
+      INFLUXDB_USER: fitbit_user
+      INFLUXDB_USER_PASSWORD: fitbit_password
+      INFLUXDB_DATA_INDEX_VERSION: tsi1
+    ports:
+      - "8086:8086"
+    volumes:
+      - ./influxdb:/var/lib/influxdb
+    healthcheck:
+      test: ["CMD", "influx", "-execute", "SHOW DATABASES"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  grafana:
+    restart: unless-stopped
+    image: grafana/grafana:latest
+    container_name: grafana
+    hostname: grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GF_SECURITY_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GF_SECURITY_ADMIN_PASSWORD:-admin}"
+      GF_PLUGINS_PREINSTALL: marcusolsson-hourly-heatmap-panel
+      TZ: "${TZ:-America/Los_Angeles}"
+    volumes:
+      - ./grafana:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s

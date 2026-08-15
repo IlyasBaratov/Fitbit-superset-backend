@@ -9,3 +9,9 @@ wheels/
 # Virtual environments
 .venv
 .env
+
+# Docker runtime data
+logs/
+tokens/
+influxdb/
+grafana/

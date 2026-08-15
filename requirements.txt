@@ -1,6 +1,7 @@
 requests
+python-dotenv
 schedule
 pytz
 influxdb
 influxdb-client
-influxdb-client-3
+influxdb3-python
