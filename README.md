@@ -42,6 +42,47 @@ This project reads OAuth credentials, refreshes tokens as needed, fetches daily 
 4. Set `HEALTH_API_PROVIDER` to either `fitbit` or `google`.
 5. Configure the correct InfluxDB version and connection settings.
 
+## Docker stack
+
+The included `compose.yml` runs the Fitbit data fetcher, InfluxDB 1.11, and Grafana:
+
+| Service | Local endpoint |
+| --- | --- |
+| InfluxDB | `http://localhost:8086` |
+| Grafana | `http://localhost:3000` |
+
+Provider OAuth values are read from the project `.env`. Runtime logs, OAuth tokens, InfluxDB data, and Grafana data are persisted in ignored project folders.
+
+Pull the images and start the database and dashboard:
+
+```bash
+docker compose pull
+docker compose up -d influxdb grafana
+docker compose ps
+```
+
+On the first authorization, run the fetcher interactively and enter a valid refresh token for the configured `HEALTH_API_PROVIDER` when prompted:
+
+```bash
+docker compose run --rm fitbit-fetch-data
+```
+
+After the first successful API call, press Ctrl+C and start the complete stack:
+
+```bash
+docker compose up -d
+```
+
+Useful lifecycle commands:
+
+```bash
+docker compose logs -f
+docker compose stop
+docker compose down
+```
+
+`docker compose down` preserves the bind-mounted data folders. The supplied stack is configured for local development with unauthenticated InfluxDB access and default Grafana credentials; configure authentication before exposing either service outside the local machine.
+
 ## Required environment variables
 
 The project expects values similar to these:

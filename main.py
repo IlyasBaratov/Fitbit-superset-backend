@@ -1,6 +1,7 @@
 
 # %%
 import base64, requests, schedule, time, json, pytz, logging, os, sys
+from dotenv import load_dotenv
 from requests.exceptions import ConnectionError
 from datetime import datetime, timedelta, timezone
 # for influxdb 1.x
@@ -14,6 +15,8 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb_client_3 import InfluxDBClient3, InfluxDBError
 # For XML processing
 import xml.etree.ElementTree as ET
+
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 # %% [markdown]
 # ## Variables
