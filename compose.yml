@@ -1,38 +1,49 @@
 name: fitbit-superset-backend
 
 services:
-  // fitbit-fetch-data:
-  //   restart: unless-stopped
-  //   image: :latest
-  //   container_name: fitbit-fetch-data
-  //   volumes:
-  //     - ./logs:/app/logs
-  //     - ./tokens:/app/tokens
-  //   environment:
-  //     FITBIT_LOG_FILE_PATH: /app/logs/fitbit.log
-  //     TOKEN_FILE_PATH: /app/tokens/fitbit.token
-  //     LOG_LEVEL: "${LOG_LEVEL:-DEBUG}"
-  //     HEALTH_API_PROVIDER: "${HEALTH_API_PROVIDER:-fitbit}"
-  //     AUTO_DATE_RANGE: "true"
-  //     INFLUXDB_VERSION: "1"
-  //     INFLUXDB_HOST: influxdb
-  //     INFLUXDB_PORT: "8086"
-  //     INFLUXDB_USERNAME: fitbit_user
-  //     INFLUXDB_PASSWORD: fitbit_password
-  //     INFLUXDB_DATABASE: FitbitHealthStats
-  //     CLIENT_ID: "${CLIENT_ID}"
-  //     CLIENT_SECRET: "${CLIENT_SECRET}"
-  //     GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
-  //     GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
-  //     GOOGLE_HEALTH_BASE_URL: "${GOOGLE_HEALTH_BASE_URL:-https://health.googleapis.com}"
-  //     GOOGLE_HEALTH_API_VERSION: "${GOOGLE_HEALTH_API_VERSION:-v4}"
-  //     GOOGLE_OAUTH_TOKEN_URL: "${GOOGLE_OAUTH_TOKEN_URL:-https://oauth2.googleapis.com/token}"
-  //     DEVICENAME: "${DEVICENAME:-Your_Device_Name}"
-  //     LOCAL_TIMEZONE: "${LOCAL_TIMEZONE:-Automatic}"
-  //     TZ: "${TZ:-America/Los_Angeles}"
-  //   depends_on:
-  //     influxdb:
-  //       condition: service_healthy
+  fitbit-fetch-data:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fitbit-superset-backend:latest
+    container_name: fitbit-fetch-data
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+      - ./tokens:/app/tokens
+    environment:
+      FITBIT_LOG_FILE_PATH: /app/logs/fitbit.log
+      TOKEN_FILE_PATH: /app/tokens/fitbit.token
+      LOG_LEVEL: "${LOG_LEVEL:-DEBUG}"
+      HEALTH_API_PROVIDER: "${HEALTH_API_PROVIDER:-fitbit}"
+      AUTO_DATE_RANGE: "true"
+      MANUAL_START_DATE: "${MANUAL_START_DATE:-}"
+      MANUAL_END_DATE: "${MANUAL_END_DATE:-}"
+      DRY_RUN_MODE: "${DRY_RUN_MODE:-false}"
+      INFLUXDB_VERSION: "1"
+      INFLUXDB_HOST: influxdb
+      INFLUXDB_PORT: "8086"
+      INFLUXDB_USERNAME: "${INFLUXDB_USERNAME:-fitbit_user}"
+      INFLUXDB_PASSWORD: "${INFLUXDB_PASSWORD:-fitbit_password}"
+      INFLUXDB_DATABASE: "${INFLUXDB_DATABASE:-FitbitHealthStats}"
+      INFLUXDB_BUCKET: "${INFLUXDB_BUCKET:-}"
+      INFLUXDB_ORG: "${INFLUXDB_ORG:-}"
+      INFLUXDB_TOKEN: "${INFLUXDB_TOKEN:-}"
+      INFLUXDB_URL: "${INFLUXDB_URL:-}"
+      INFLUXDB_V3_ACCESS_TOKEN: "${INFLUXDB_V3_ACCESS_TOKEN:-}"
+      CLIENT_ID: "${CLIENT_ID:-}"
+      CLIENT_SECRET: "${CLIENT_SECRET:-}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
+      GOOGLE_HEALTH_BASE_URL: "${GOOGLE_HEALTH_BASE_URL:-https://health.googleapis.com}"
+      GOOGLE_HEALTH_API_VERSION: "${GOOGLE_HEALTH_API_VERSION:-v4}"
+      GOOGLE_OAUTH_TOKEN_URL: "${GOOGLE_OAUTH_TOKEN_URL:-https://oauth2.googleapis.com/token}"
+      DEVICENAME: "${DEVICENAME:-Your_Device_Name}"
+      LOCAL_TIMEZONE: "${LOCAL_TIMEZONE:-Automatic}"
+      TZ: "${TZ:-America/Los_Angeles}"
+    depends_on:
+      influxdb:
+        condition: service_healthy
 
   influxdb:
     restart: unless-stopped
@@ -40,9 +51,9 @@ services:
     container_name: influxdb
     hostname: influxdb
     environment:
-      INFLUXDB_DB: FitbitHealthStats
-      INFLUXDB_USER: fitbit_user
-      INFLUXDB_USER_PASSWORD: fitbit_password
+      INFLUXDB_DB: "${INFLUXDB_DATABASE:-FitbitHealthStats}"
+      INFLUXDB_USER: "${INFLUXDB_USERNAME:-fitbit_user}"
+      INFLUXDB_USER_PASSWORD: "${INFLUXDB_PASSWORD:-fitbit_password}"
       INFLUXDB_DATA_INDEX_VERSION: tsi1
     ports:
       - "8086:8086"
