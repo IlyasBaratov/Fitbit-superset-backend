@@ -63,9 +63,7 @@ docker compose ps
 
 On the first authorization, run the fetcher interactively and enter a valid refresh token for the configured `HEALTH_API_PROVIDER` when prompted:
 
-```bash
-docker compose run --rm fitbit-fetch-data
-```
+
 
 After the first successful API call, press Ctrl+C and start the complete stack:
 
