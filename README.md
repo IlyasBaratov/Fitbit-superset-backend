@@ -24,10 +24,14 @@ This project reads OAuth credentials, refreshes tokens as needed, fetches daily 
 
 ## Prerequisites
 
-- Python 3.14+ (matching the project configuration)
+- Docker Desktop with Docker Compose for the containerized stack
+- Python 3.14+ for local development (matching `pyproject.toml`)
 - Access to a Fitbit app or Google Cloud OAuth client
 - A running InfluxDB instance or compatible endpoint
 - A valid `.env` file with your credentials and database settings
+
+The Docker image uses Python 3.10 from the published upstream Fitbit image. The
+application is also syntax-checked against that runtime during Docker validation.
 
 ## Setup
 
@@ -44,7 +48,8 @@ This project reads OAuth credentials, refreshes tokens as needed, fetches daily 
 
 ## Docker stack
 
-The included `compose.yml` runs the Fitbit data fetcher, InfluxDB 1.11, and Grafana:
+The included `compose.yml` runs this repository's data collector, InfluxDB 1.11,
+and Grafana:
 
 | Service | Local endpoint |
 | --- | --- |
@@ -53,28 +58,76 @@ The included `compose.yml` runs the Fitbit data fetcher, InfluxDB 1.11, and Graf
 
 Provider OAuth values are read from the project `.env`. Runtime logs, OAuth tokens, InfluxDB data, and Grafana data are persisted in ignored project folders.
 
-Pull the images and start the database and dashboard:
+The Compose collector uses `AUTO_DATE_RANGE=true` so its detached process does
+not pause for manual date input. For a one-off manual backfill, override
+`AUTO_DATE_RANGE=false` and provide both manual dates on the command line.
+
+The collector image is built locally as `fitbit-superset-backend:latest`. Its
+Dockerfile inherits from `thisisarpanghosh/fitbit-fetch-data:latest`, preserving
+the upstream Fitbit packages and functionality while replacing the startup
+command with this repository's `/app/main.py`.
+
+Build the derived collector image:
 
 ```bash
-docker compose pull
+docker compose build fitbit-fetch-data
+```
+
+Start the database and dashboard first:
+
+```bash
 docker compose up -d influxdb grafana
 docker compose ps
 ```
 
-On the first authorization, run the fetcher interactively and enter a valid refresh token for the configured `HEALTH_API_PROVIDER` when prompted:
+On the first authorization, run the collector interactively and enter a valid
+refresh token for the configured `HEALTH_API_PROVIDER` when prompted. The token
+is saved under `./tokens` for later container runs:
 
+```bash
+docker compose run --rm fitbit-fetch-data
+```
 
+For a manual date range instead, run:
 
-After the first successful API call, press Ctrl+C and start the complete stack:
+```bash
+docker compose run --rm -e AUTO_DATE_RANGE=false -e MANUAL_START_DATE=2024-01-01 -e MANUAL_END_DATE=2024-01-31 fitbit-fetch-data
+```
+
+After authorization succeeds, press Ctrl+C if the interactive run remains
+scheduled, then start the complete stack:
 
 ```bash
 docker compose up -d
 ```
 
+Verify service state and follow individual logs:
+
+```bash
+docker compose ps
+docker compose logs -f fitbit-fetch-data
+docker compose logs -f influxdb
+docker compose logs -f grafana
+```
+
+Verify that the derived image and running collector use this repository's
+`/app/main.py`, rather than the upstream `/app/Fitbit_Fetch.py`:
+
+```bash
+docker image inspect fitbit-superset-backend:latest --format '{{json .Config.Cmd}} {{.Config.WorkingDir}} {{.Config.User}}'
+docker inspect fitbit-fetch-data --format '{{json .Config.Cmd}} {{.Config.WorkingDir}} {{.Config.User}}'
+docker compose exec fitbit-fetch-data sh -c 'tr "\0" " " </proc/1/cmdline; echo; readlink -f /proc/1/cwd'
+docker compose exec fitbit-fetch-data sha256sum /app/main.py
+```
+
+The expected command is `["python","main.py"]`, the working directory is
+`/app`, and the user is `appuser`. Compare the container checksum with
+`sha256sum main.py` on Linux/macOS or `Get-FileHash .\main.py -Algorithm SHA256`
+in PowerShell.
+
 Useful lifecycle commands:
 
 ```bash
-docker compose logs -f
 docker compose stop
 docker compose down
 ```

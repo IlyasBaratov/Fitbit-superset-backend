@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.venv
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+wheels/
+logs/
+tokens/
+influxdb/
+grafana/
