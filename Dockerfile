@@ -8,7 +8,7 @@ COPY --chown=appuser:appuser --chmod=0644 requirements.txt /app/requirements-cus
 
 RUN python -m pip install --no-cache-dir -r /app/requirements-custom.txt
 
-COPY --chown=appuser:appuser --chmod=0644 main.py /app/main.py
+COPY --chown=appuser:appuser --chmod=0644 main.py health_schema.py /app/
 
 USER appuser
 

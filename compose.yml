@@ -39,6 +39,9 @@ services:
       GOOGLE_HEALTH_API_VERSION: "${GOOGLE_HEALTH_API_VERSION:-v4}"
       GOOGLE_OAUTH_TOKEN_URL: "${GOOGLE_OAUTH_TOKEN_URL:-https://oauth2.googleapis.com/token}"
       DEVICENAME: "${DEVICENAME:-Your_Device_Name}"
+      USER_ID: "${USER_ID:-user_001}"
+      DEVICE_ID: "${DEVICE_ID:-fitbit_air_001}"
+      DEVICE_METADATA_STATE_PATH: /app/tokens/device_metadata_state.json
       LOCAL_TIMEZONE: "${LOCAL_TIMEZONE:-Automatic}"
       TZ: "${TZ:-America/Los_Angeles}"
     depends_on:

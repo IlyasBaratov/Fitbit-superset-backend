@@ -44,7 +44,8 @@ application is also syntax-checked against that runtime during Docker validation
 2. Update the values in `.env` with your real credentials and server details.
 3. Make sure `FITBIT_LOG_FILE_PATH` and `TOKEN_FILE_PATH` point to writable files.
 4. Set `HEALTH_API_PROVIDER` to either `fitbit` or `google`.
-5. Configure the correct InfluxDB version and connection settings.
+5. Set stable `USER_ID` and `DEVICE_ID` values. Do not change them between runs.
+6. Configure the correct InfluxDB version and connection settings.
 
 ## Docker stack
 
@@ -94,6 +95,13 @@ For a manual date range instead, run:
 docker compose run --rm -e AUTO_DATE_RANGE=false -e MANUAL_START_DATE=2024-01-01 -e MANUAL_END_DATE=2024-01-31 fitbit-fetch-data
 ```
 
+For a small recent Google Health synchronization, first set
+`HEALTH_API_PROVIDER=google` in `.env`, then substitute a recent date:
+
+```bash
+docker compose run --rm -e AUTO_DATE_RANGE=false -e MANUAL_START_DATE=2026-08-20 -e MANUAL_END_DATE=2026-08-20 fitbit-fetch-data
+```
+
 After authorization succeeds, press Ctrl+C if the interactive run remains
 scheduled, then start the complete stack:
 
@@ -140,6 +148,9 @@ The project expects values similar to these:
 
 ```env
 HEALTH_API_PROVIDER=fitbit
+USER_ID=user_001
+DEVICE_ID=device_001
+DEVICENAME=Charge5
 CLIENT_ID=your_application_client_ID
 CLIENT_SECRET=your_application_client_secret
 FITBIT_LOG_FILE_PATH=/path/to/fitbit.log
@@ -164,6 +175,10 @@ GOOGLE_HEALTH_API_VERSION=v4
 GOOGLE_OAUTH_TOKEN_URL=https://oauth2.googleapis.com/token
 ```
 
+`USER_ID` and `DEVICE_ID` become InfluxDB tags and must remain stable. The
+collector never generates random identifiers. OAuth tokens and the device
+metadata deduplication state remain in the ignored `tokens/` bind mount.
+
 For InfluxDB 2.x or 3.x, configure the matching bucket, org, token, and URL values instead of the 1.x variables.
 
 ## Running the script
@@ -177,6 +192,60 @@ If you are using `uv` in this project, you can also run:
 ```bash
 uv run python main.py
 ```
+
+## InfluxDB measurements
+
+Every point includes the `UserId`, `Provider`, `Device`, and `DeviceId` tags.
+The collector writes these 22 measurements when the active provider and device
+return the corresponding data:
+
+`HeartRate_Intraday`, `RestingHR`, `HRV`, `HR zones`, `Steps_Intraday`,
+`Total Steps`, `Activity Minutes`, `Activity Records`, `calories`, `distance`,
+`GPS`, `Sleep Summary`, `Sleep Levels`, `SPO2`, `SPO2_Intraday`,
+`BreathingRate`, `Skin Temperature Variation`, `weight`, `height`, `bmi`,
+`DeviceBatteryLevel`, and `Device Metadata`.
+
+Canonical units are BPM, seconds for exercise durations, kilometers for
+distance, kilograms for weight, centimeters for `height.value`, percent for
+SpO2/battery, and Celsius for temperature. Battery and GPS are optional and are
+currently Fitbit-only. See [docs/influxdb_schema.md](docs/influxdb_schema.md)
+for every field, type, unit, tag, timestamp rule, and compatibility decision.
+
+Inspect stored data:
+
+```bash
+docker compose exec influxdb influx -database FitbitHealthStats -execute 'SHOW MEASUREMENTS'
+docker compose exec influxdb influx -database FitbitHealthStats -execute 'SELECT * FROM "HeartRate_Intraday" ORDER BY time DESC LIMIT 5'
+docker compose exec influxdb influx -database FitbitHealthStats -execute 'SELECT * FROM "height" ORDER BY time DESC LIMIT 5'
+docker compose exec influxdb influx -database FitbitHealthStats -execute 'SELECT * FROM "Device Metadata" ORDER BY time DESC LIMIT 5'
+docker compose exec influxdb influx -database FitbitHealthStats -execute 'SHOW FIELD KEYS FROM "RestingHR"'
+```
+
+## Tests
+
+Unit tests use mocked provider payloads and do not require OAuth credentials:
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest
+```
+
+## Troubleshooting
+
+- **No API data:** confirm the requested dates contain synced device data and
+  inspect collector warnings for an empty dataset.
+- **Invalid OAuth token:** run the collector interactively and provide a valid
+  refresh token; the token file must match `HEALTH_API_PROVIDER`.
+- **HTTP 403:** the account is missing permission for that metric. Other
+  measurements continue; enable the required Google/Fitbit scope before retrying.
+- **HTTP 404 or unsupported metric:** the provider/device does not expose that
+  data type. The collector skips it without creating zeros.
+- **InfluxDB connection failure:** confirm `influxdb` is healthy, the collector
+  uses host `influxdb` and port `8086`, and database credentials match.
+- **Field-type conflict:** inspect `SHOW FIELD KEYS FROM "measurement"`.
+  `RestingHR.value` and `Total Steps.value` deliberately remain floats to match
+  this repository's existing InfluxDB history; rewriting history requires a
+  separate, explicit migration.
 
 ## Notes
 
