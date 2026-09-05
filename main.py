@@ -15,6 +15,20 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb_client_3 import InfluxDBClient3, InfluxDBError
 # For XML processing
 import xml.etree.ElementTree as ET
+from health_schema import (
+    FIELD_TYPES,
+    build_common_tags,
+    calculate_bmi,
+    metadata_signature,
+    parse_google_exercise,
+    parse_google_height,
+    parse_google_weight,
+    prepare_points,
+    sanitize_fields,
+    sleep_efficiency,
+    sleep_stage,
+    stable_resource_id,
+)
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
@@ -52,6 +66,9 @@ client_secret = os.environ.get("CLIENT_SECRET") or "your_application_client_secr
 google_client_id = os.environ.get("GOOGLE_CLIENT_ID") or client_id
 google_client_secret = os.environ.get("GOOGLE_CLIENT_SECRET") or client_secret
 DEVICENAME = os.environ.get("DEVICENAME") or "Your_Device_Name" # e.g. "Charge5"
+USER_ID = os.environ.get("USER_ID") or "user_001"
+DEVICE_ID = os.environ.get("DEVICE_ID") or "fitbit_air_001"
+DEVICE_METADATA_STATE_PATH = os.environ.get("DEVICE_METADATA_STATE_PATH") or os.path.join(os.path.dirname(TOKEN_FILE_PATH), "device_metadata_state.json")
 ACCESS_TOKEN = "" # Empty Global variable initialization, will be replaced with a functional access code later using the refresh code
 MANUAL_START_DATE = os.getenv("MANUAL_START_DATE", None) # optional, in YYYY-MM-DD format, if you want to bulk update only from specific date
 MANUAL_END_DATE = os.getenv("MANUAL_END_DATE", datetime.today().strftime('%Y-%m-%d')) # optional, in YYYY-MM-DD format, if you want to bulk update until a specific date
@@ -62,6 +79,8 @@ SCHEDULE_AUTO_UPDATE = True if AUTO_DATE_RANGE else False # Scheduling updates o
 SERVER_ERROR_MAX_RETRY = 3
 EXPIRED_TOKEN_MAX_RETRY = 5
 SKIP_REQUEST_ON_SERVER_ERROR = True
+REQUEST_MAX_RETRIES = int(os.environ.get("REQUEST_MAX_RETRIES") or "5")
+REQUEST_TIMEOUT_SECONDS = int(os.environ.get("REQUEST_TIMEOUT_SECONDS") or "30")
 DRY_RUN_MODE = str(os.environ.get("DRY_RUN_MODE", "False")).lower() in ["true", "1", "yes", "y"]
 LOG_LEVEL_NAME = (os.environ.get("LOG_LEVEL") or "DEBUG").strip().upper()
 LOG_LEVEL = getattr(logging, LOG_LEVEL_NAME, None)
@@ -121,6 +140,16 @@ def get_retry_after_seconds(response):
             pass
 
     return 120
+
+
+def log_metric_http_error(metric_name, error):
+    status_code = error.response.status_code if error.response is not None else None
+    if status_code == 403:
+        logging.warning("%s unavailable: missing provider permission or device capability (HTTP 403)", metric_name)
+    elif status_code == 404:
+        logging.warning("%s unavailable: unsupported provider metric or endpoint (HTTP 404)", metric_name)
+    else:
+        logging.error("%s failed due to provider HTTP error%s", metric_name, f" {status_code}" if status_code else "")
 
 
 def get_google_health_api_url(path):
@@ -356,14 +385,16 @@ def get_google_datapoints_for_date(data_type, date_str, page_size=10000):
             points = _paginate({"filter": filter_expr})
             used_server_filter = True
             break
-        except requests.exceptions.HTTPError:
+        except requests.exceptions.HTTPError as error:
+            if error.response is not None and error.response.status_code in (403, 404):
+                raise
             continue
 
     if points is None:
         try:
             points = _paginate({})
         except requests.exceptions.HTTPError:
-            points = []
+            raise
     filtered = []
     for data_point in points:
         ts = parse_google_datapoint_timestamp(data_point, data_type)
@@ -401,21 +432,20 @@ def request_data_from_fitbit(url, headers=None, params=None, data=None, request_
     headers = headers or {}
     params = params or {}
     data = data or {}
-    retry_attempts = 0
     logging.debug("Requesting data from provider '%s' via URL: %s", HEALTH_API_PROVIDER, url)
     if HEALTH_API_PROVIDER == "google" and url.startswith(FITBIT_API_BASE_URL):
         raise NotImplementedError("Google provider is enabled but this endpoint is still Fitbit-only. Migrate the caller to a Google Health endpoint first.")
 
-    while True: # Unlimited Retry attempts
+    for retry_attempt in range(REQUEST_MAX_RETRIES + 1):
         if request_type == "get" and headers == {}:
             headers = get_default_auth_headers()
-        try:        
+        try:
             if request_type == "get":
-                response = requests.get(url, headers=headers, params=params, data=data)
+                response = requests.get(url, headers=headers, params=params, data=data, timeout=REQUEST_TIMEOUT_SECONDS)
             elif request_type == "post":
-                response = requests.post(url, headers=headers, params=params, data=data)
+                response = requests.post(url, headers=headers, params=params, data=data, timeout=REQUEST_TIMEOUT_SECONDS)
             else:
-                raise Exception("Invalid request type " + str(request_type))
+                raise ValueError("Invalid request type " + str(request_type))
         
             if response.status_code == 200: # Success
                 if url.endswith(".tcx"): # TCX XML file for GPS data
@@ -424,38 +454,47 @@ def request_data_from_fitbit(url, headers=None, params=None, data=None, request_
                     return response.json()
             elif response.status_code == 429: # API Limit reached
                 retry_after = get_retry_after_seconds(response)
+                if retry_attempt >= REQUEST_MAX_RETRIES:
+                    logging.error("Provider rate limit retry budget exhausted for %s", url)
+                    response.raise_for_status()
                 logging.warning("API limit reached for provider '%s'. Error code: %s, retrying in %s seconds", HEALTH_API_PROVIDER, response.status_code, retry_after)
-                print(f"API limit reached for provider '{HEALTH_API_PROVIDER}'. Error code: {response.status_code}, retrying in {retry_after} seconds")
-                time.sleep(retry_after)
+                time.sleep(min(retry_after, 300))
             elif response.status_code == 401: # Access token expired ( most likely )
-                logging.warning("Error code: %s, provider: %s, details: %s", response.status_code, HEALTH_API_PROVIDER, response.text)
-                print(f"Error code: {response.status_code}, provider: {HEALTH_API_PROVIDER}, details: {response.text}")
+                if retry_attempt >= EXPIRED_TOKEN_MAX_RETRY:
+                    logging.error("OAuth refresh retry budget exhausted for provider '%s'", HEALTH_API_PROVIDER)
+                    response.raise_for_status()
+                logging.warning("Access token rejected for provider '%s'; refreshing", HEALTH_API_PROVIDER)
                 ACCESS_TOKEN = Get_New_Access_Token(client_id, client_secret)
                 headers["Authorization"] = f"Bearer {ACCESS_TOKEN}" # Update the renewed ACCESS_TOKEN to the headers dict
-                time.sleep(30)
-                if retry_attempts > EXPIRED_TOKEN_MAX_RETRY:
-                    logging.error("Unable to solve the 401 Error. Please debug - " + response.text)
-                    raise Exception("Unable to solve the 401 Error. Please debug - " + response.text)
             elif response.status_code in [500, 502, 503, 504]: # Fitbit server is down or not responding ( most likely ):
-                logging.warning("Server Error encountered ( Code 5xx ): Retrying after 120 seconds....")
-                time.sleep(120)
-                if retry_attempts > SERVER_ERROR_MAX_RETRY:
-                    logging.error("Unable to solve the server Error. Retry limit exceed. Please debug - " + response.text)
+                if retry_attempt >= SERVER_ERROR_MAX_RETRY:
+                    logging.error("Provider server retry budget exhausted for %s", url)
                     if SKIP_REQUEST_ON_SERVER_ERROR:
-                        logging.warning("Retry limit reached for server error : Skipping request -> " + url)
+                        logging.warning("Skipping metric after repeated provider server failures: %s", url)
                         return None
+                    response.raise_for_status()
+                wait_seconds = min(30 * (retry_attempt + 1), 120)
+                logging.warning("Temporary provider server failure HTTP %s; retrying in %s seconds", response.status_code, wait_seconds)
+                time.sleep(wait_seconds)
+            elif response.status_code in (403, 404):
+                category = "missing permission or unsupported metric" if response.status_code == 403 else "unsupported metric or endpoint"
+                if not suppress_http_error_log:
+                    logging.warning("Provider returned HTTP %s (%s) for %s", response.status_code, category, url)
+                response.raise_for_status()
             else:
                 if not suppress_http_error_log:
-                    logging.error("API request failed for provider '%s'. Status code: %s %s", HEALTH_API_PROVIDER, response.status_code, response.text)
-                    print(f"API request failed for provider '{HEALTH_API_PROVIDER}'. Status code: {response.status_code}", response.text)
+                    logging.error("Provider request failed with HTTP %s for %s", response.status_code, url)
                 response.raise_for_status()
-                return None
 
-        except ConnectionError as e:
-            logging.error("Retrying in 5 minutes - Failed to connect to internet : " + str(e))
-            print("Retrying in 5 minutes - Failed to connect to internet : " + str(e))
-        retry_attempts += 1
-        time.sleep(30)
+        except (ConnectionError, requests.exceptions.Timeout) as e:
+            if retry_attempt >= REQUEST_MAX_RETRIES:
+                logging.error("Network retry budget exhausted for provider '%s'", HEALTH_API_PROVIDER)
+                raise
+            wait_seconds = min(5 * (retry_attempt + 1), 30)
+            logging.warning("Provider network error; retrying in %s seconds: %s", wait_seconds, e)
+            time.sleep(wait_seconds)
+
+    raise RuntimeError("Provider request retry loop exhausted")
 
 # %% [markdown]
 # ## Token Refresh Management
@@ -485,9 +524,9 @@ def refresh_fitbit_tokens(client_id, client_secret, refresh_token):
         "grant_type": "refresh_token",
         "refresh_token": refresh_token
     }
-    response = requests.post(url, headers=headers, data=data)
+    response = requests.post(url, headers=headers, data=data, timeout=REQUEST_TIMEOUT_SECONDS)
     if response.status_code != 200:
-        logging.error("Fitbit token refresh failed. Status code: %s details: %s", response.status_code, response.text)
+        logging.error("Fitbit token refresh failed with HTTP %s", response.status_code)
         response.raise_for_status()
 
     json_data = response.json()
@@ -506,9 +545,9 @@ def refresh_google_tokens(client_id, client_secret, refresh_token):
         "grant_type": "refresh_token",
         "refresh_token": refresh_token
     }
-    response = requests.post(GOOGLE_OAUTH_TOKEN_URL, data=data)
+    response = requests.post(GOOGLE_OAUTH_TOKEN_URL, data=data, timeout=REQUEST_TIMEOUT_SECONDS)
     if response.status_code != 200:
-        logging.error("Google token refresh failed. Status code: %s details: %s", response.status_code, response.text)
+        logging.error("Google token refresh failed with HTTP %s", response.status_code)
         response.raise_for_status()
 
     json_data = response.json()
@@ -594,29 +633,87 @@ else:
     logging.error("No matching version found. Supported values are 1 and 2 and 3")
     raise InfluxDBClientError("No matching version found. Supported values are 1 and 2 and 3")
 
+
+def detect_influx_field_type_compatibility():
+    if DRY_RUN_MODE or INFLUXDB_VERSION != "1":
+        return
+    for measurement in ("RestingHR", "Total Steps"):
+        try:
+            result = influxdbclient.query(f'SHOW FIELD KEYS FROM "{measurement}"')
+            rows = list(result.get_points(measurement=measurement))
+        except InfluxDBClientError as error:
+            logging.warning("Could not inspect field types for %s: %s", measurement, error)
+            continue
+        value_row = next((row for row in rows if row.get("fieldKey") == "value"), None)
+        if not value_row:
+            continue
+        existing_type = value_row.get("fieldType")
+        if existing_type == "float":
+            FIELD_TYPES[measurement]["value"] = float
+            logging.warning(
+                "InfluxDB migration required for %s.value: historical type is float; preserving float to avoid mixed-field writes",
+                measurement,
+            )
+        elif existing_type == "integer":
+            FIELD_TYPES[measurement]["value"] = int
+        else:
+            logging.error("Unsupported existing field type for %s.value: %s", measurement, existing_type)
+
+
+detect_influx_field_type_compatibility()
+
+PENDING_DEVICE_METADATA_SIGNATURE = None
+
+
+def get_common_tags():
+    return build_common_tags(USER_ID, HEALTH_API_PROVIDER, DEVICENAME, DEVICE_ID)
+
+
+def persist_device_metadata_signature():
+    global PENDING_DEVICE_METADATA_SIGNATURE
+    if not PENDING_DEVICE_METADATA_SIGNATURE:
+        return
+    os.makedirs(os.path.dirname(DEVICE_METADATA_STATE_PATH) or ".", exist_ok=True)
+    with open(DEVICE_METADATA_STATE_PATH, "w") as state_file:
+        json.dump({"signature": PENDING_DEVICE_METADATA_SIGNATURE}, state_file)
+    PENDING_DEVICE_METADATA_SIGNATURE = None
+
+
 def write_points_to_influxdb(points):
+    timezone_name = getattr(LOCAL_TIMEZONE, "zone", str(LOCAL_TIMEZONE))
+    prepared_points = prepare_points(points, get_common_tags(), timezone_name)
+    skipped_count = len(points) - len(prepared_points)
+    if skipped_count:
+        logging.warning("Skipped %s invalid or empty InfluxDB points", skipped_count)
+    if not prepared_points:
+        logging.warning("No valid InfluxDB points to write")
+        return
+
     if DRY_RUN_MODE:
-        logging.info("DRY_RUN_MODE: Skipping InfluxDB write for %s points", len(points))
+        logging.info("DRY_RUN_MODE: Skipping InfluxDB write for %s validated points", len(prepared_points))
         return
 
     if INFLUXDB_VERSION == "2":
         try:
-            influxdb_write_api.write(bucket=INFLUXDB_BUCKET, org=INFLUXDB_ORG, record=points)
-            logging.info("Successfully updated influxdb database with new points")
+            influxdb_write_api.write(bucket=INFLUXDB_BUCKET, org=INFLUXDB_ORG, record=prepared_points)
+            persist_device_metadata_signature()
+            logging.info("Successfully wrote %s points to InfluxDB", len(prepared_points))
         except InfluxDBError as err:
             logging.error("Unable to connect with influxdb 2.x database! " + str(err))
             print("Influxdb connection failed! ", str(err))
     elif INFLUXDB_VERSION == "1":
         try:
-            influxdbclient.write_points(points)
-            logging.info("Successfully updated influxdb database with new points")
+            influxdbclient.write_points(prepared_points)
+            persist_device_metadata_signature()
+            logging.info("Successfully wrote %s points to InfluxDB", len(prepared_points))
         except InfluxDBClientError as err:
             logging.error("Unable to connect with influxdb 1.x database! " + str(err))
             print("Influxdb connection failed! ", str(err))
     elif INFLUXDB_VERSION == "3":
         try:
-            influxdbclient.write(record=points)
-            logging.info("Successfully updated influxdb database with new points")
+            influxdbclient.write(record=prepared_points)
+            persist_device_metadata_signature()
+            logging.info("Successfully wrote %s points to InfluxDB", len(prepared_points))
         except InfluxDBError as err:
             logging.error("Unable to connect with influxdb 3.x database! " + str(err))
             print("Influxdb connection failed! ", str(err))
@@ -648,10 +745,8 @@ def get_user_timezone_name():
     return "UTC"
 
 
-def discover_google_device_name():
-    """Inspect a few popular data types and return the first dataSource.device.displayName
-    we can find (e.g. "Versa 4"). Google attaches device metadata to every data point even
-    though it does not expose battery telemetry. Returns None if nothing usable is found."""
+def discover_google_device_metadata():
+    """Return actual device metadata attached to a recent Google data point."""
     for data_type in ("heart-rate", "steps", "daily-resting-heart-rate", "weight", "exercise"):
         try:
             resp = request_google_data_points_list(
@@ -665,8 +760,22 @@ def discover_google_device_name():
             device = (dp.get("dataSource") or {}).get("device") or {}
             name = device.get("displayName")
             if name:
-                return name.strip()
-    return None
+                metadata = {
+                    "deviceName": name.strip(),
+                    "deviceModel": device.get("model"),
+                    "firmwareVersion": device.get("firmwareVersion"),
+                    "connectionStatus": device.get("connectionStatus"),
+                }
+                try:
+                    metadata["_observationTime"] = parse_google_datapoint_timestamp(dp, data_type)
+                except (TypeError, ValueError):
+                    metadata["_observationTime"] = None
+                return metadata
+    return {}
+
+
+def discover_google_device_name():
+    return discover_google_device_metadata().get("deviceName")
 
 
 if LOCAL_TIMEZONE == "Automatic":
@@ -676,8 +785,11 @@ else:
 
 # Auto-detect the device name from the Google Health API if the user did not set
 # DEVICENAME explicitly. Falls back silently to the placeholder if discovery fails.
+GOOGLE_DEVICE_METADATA = {}
+if HEALTH_API_PROVIDER == "google":
+    GOOGLE_DEVICE_METADATA = discover_google_device_metadata()
 if HEALTH_API_PROVIDER == "google" and DEVICENAME == "Your_Device_Name":
-    discovered_device_name = discover_google_device_name()
+    discovered_device_name = GOOGLE_DEVICE_METADATA.get("deviceName")
     if discovered_device_name:
         logging.info("Auto-detected Google device displayName: %s (override with DEVICENAME env var)", discovered_device_name)
         DEVICENAME = discovered_device_name
@@ -704,6 +816,70 @@ else:
 
 # %%
 collected_records = []
+
+
+def load_device_metadata_signature():
+    try:
+        with open(DEVICE_METADATA_STATE_PATH, "r") as state_file:
+            return (json.load(state_file) or {}).get("signature")
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+
+
+def get_device_metadata():
+    """Queue metadata only when actual provider metadata changes."""
+    global GOOGLE_DEVICE_METADATA, PENDING_DEVICE_METADATA_SIGNATURE, DEVICENAME
+
+    observation_time = None
+    fields = {}
+    if HEALTH_API_PROVIDER == "google":
+        GOOGLE_DEVICE_METADATA = discover_google_device_metadata() or GOOGLE_DEVICE_METADATA
+        if not GOOGLE_DEVICE_METADATA:
+            logging.warning("Device Metadata unavailable for provider 'google'; skipping")
+            return
+        observation_time = GOOGLE_DEVICE_METADATA.get("_observationTime")
+        fields = sanitize_fields({
+            "deviceName": GOOGLE_DEVICE_METADATA.get("deviceName"),
+            "deviceModel": GOOGLE_DEVICE_METADATA.get("deviceModel"),
+            "timezone": getattr(LOCAL_TIMEZONE, "zone", str(LOCAL_TIMEZONE)),
+            "firmwareVersion": GOOGLE_DEVICE_METADATA.get("firmwareVersion"),
+            "connectionStatus": GOOGLE_DEVICE_METADATA.get("connectionStatus"),
+        })
+    else:
+        try:
+            devices = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1/user/-/devices.json") or []
+        except requests.exceptions.HTTPError as error:
+            logging.warning("Device metadata unavailable for Fitbit: %s", error)
+            devices = []
+        if devices:
+            device = devices[0]
+            observation_time = device.get("lastSyncTime")
+            fields = sanitize_fields({
+                "deviceName": device.get("deviceVersion") or DEVICENAME,
+                "deviceModel": device.get("deviceVersion"),
+                "timezone": getattr(LOCAL_TIMEZONE, "zone", str(LOCAL_TIMEZONE)),
+                "lastSyncTime": device.get("lastSyncTime"),
+                "batteryPercent": device.get("batteryLevel"),
+                "firmwareVersion": device.get("firmwareVersion"),
+                "connectionStatus": device.get("connectionStatus"),
+            })
+
+    if not fields:
+        logging.warning("Device Metadata unavailable for provider '%s'; skipping", HEALTH_API_PROVIDER)
+        return
+
+    signature = metadata_signature(fields, get_common_tags())
+    if signature == load_device_metadata_signature():
+        logging.debug("Device Metadata unchanged; skipping duplicate write")
+        return
+
+    collected_records.append({
+        "measurement": "Device Metadata",
+        "time": observation_time or datetime.now(timezone.utc).isoformat(),
+        "fields": fields,
+    })
+    PENDING_DEVICE_METADATA_SIGNATURE = signature
+    logging.info("Queued changed Device Metadata for provider '%s'", HEALTH_API_PROVIDER)
 
 def update_working_dates():
     global end_date, start_date, end_date_str, start_date_str
@@ -748,7 +924,7 @@ def get_intraday_data_limit_1d(date_str, measurement_list):
             try:
                 points = get_google_datapoints_for_date(data_type, date_str)
             except requests.exceptions.HTTPError as err:
-                logging.error("Google intraday fetch failed for %s on %s: %s", data_type, date_str, str(err))
+                log_metric_http_error(f"Google {data_type} for {date_str}", err)
                 continue
 
             for data_point, ts in points:
@@ -819,7 +995,7 @@ def get_daily_data_limit_30d(start_date_str, end_date_str):
         try:
             points = get_google_datapoints_for_date_range("daily-heart-rate-variability", start_date_str, end_date_str)
         except requests.exceptions.HTTPError as e:
-            logging.error("Google HRV fetch failed: %s", str(e))
+            log_metric_http_error("Google HRV", e)
             points = []
         inserted_count = 0
         for data_point, ts in points:
@@ -856,7 +1032,7 @@ def get_daily_data_limit_30d(start_date_str, end_date_str):
         try:
             points = get_google_datapoints_for_date_range("daily-respiratory-rate", start_date_str, end_date_str)
         except requests.exceptions.HTTPError as e:
-            logging.error("Google Breathing Rate fetch failed: %s", str(e))
+            log_metric_http_error("Google Breathing Rate", e)
             points = []
         inserted_count = 0
         for data_point, ts in points:
@@ -881,7 +1057,7 @@ def get_daily_data_limit_30d(start_date_str, end_date_str):
         try:
             points = get_google_datapoints_for_date_range("daily-sleep-temperature-derivations", start_date_str, end_date_str)
         except requests.exceptions.HTTPError as e:
-            logging.error("Google Skin Temp fetch failed: %s", str(e))
+            log_metric_http_error("Google Skin Temperature", e)
             points = []
         inserted_count = 0
         for data_point, ts in points:
@@ -917,7 +1093,7 @@ def get_daily_data_limit_30d(start_date_str, end_date_str):
         try:
             points = get_google_datapoints_for_date_range("oxygen-saturation", start_date_str, end_date_str)
         except requests.exceptions.HTTPError as e:
-            logging.error("Google SPO2 intraday fetch failed: %s", str(e))
+            log_metric_http_error("Google SPO2 intraday", e)
             points = []
         inserted_count = 0
         for data_point, ts in points:
@@ -937,64 +1113,67 @@ def get_daily_data_limit_30d(start_date_str, end_date_str):
         else:
             logging.warning("No SPO2 intraday records found for date %s to %s in Google mode", start_date_str, end_date_str)
  
-        # --- Weight and BMI (weight) ---
-        # Google field: weight → { weightGrams }. BMI is NOT exposed by the weight endpoint,
-        # so we fetch the latest height (data type "height" → heightMillimeters) and compute
-        # BMI = weight_kg / height_m^2.
-        # Deduplicates by timestamp — Withings via Health Connect produces duplicate entries
+        # --- Height, Weight, and calculated BMI ---
+        height_samples = []
+        height_inserted_count = 0
+        try:
+            height_response = request_google_data_points_list("height", params={"pageSize": 100})
+            seen_height_timestamps = set()
+            for data_point in height_response.get("dataPoints", []) if isinstance(height_response, dict) else []:
+                height_time, height_fields = parse_google_height(data_point)
+                if not height_time or not height_fields or height_time in seen_height_timestamps:
+                    continue
+                seen_height_timestamps.add(height_time)
+                height_samples.append((datetime.fromisoformat(height_time.replace("Z", "+00:00")), height_fields["heightMeters"]))
+                collected_records.append({
+                    "measurement": "height",
+                    "time": height_time,
+                    "fields": height_fields,
+                })
+                height_inserted_count += 1
+        except requests.exceptions.HTTPError as error:
+            log_metric_http_error("Google height", error)
+        height_samples.sort(key=lambda item: item[0])
+        if height_inserted_count:
+            logging.info("Recorded height (Google mode): %s points", height_inserted_count)
+        else:
+            logging.warning("No height records available in Google mode")
+
         try:
             points = get_google_datapoints_for_date_range("weight", start_date_str, end_date_str)
         except requests.exceptions.HTTPError as e:
-            logging.error("Google Weight fetch failed: %s", str(e))
+            log_metric_http_error("Google weight", e)
             points = []
-
-        height_meters = None
-        try:
-            height_response = request_google_data_points_list("height", params={"pageSize": 100})
-            latest_mm, latest_time = None, None
-            for hp in height_response.get("dataPoints", []) if isinstance(height_response, dict) else []:
-                h = hp.get("height", {})
-                mm = extract_first_numeric(h.get("heightMillimeters"))
-                physical = (h.get("sampleTime") or {}).get("physicalTime")
-                if mm is not None and physical and (latest_time is None or physical > latest_time):
-                    latest_mm, latest_time = mm, physical
-            if latest_mm is not None:
-                height_meters = latest_mm / 1000.0
-                logging.info("Fetched latest height for BMI: %.3f m (recorded at %s)", height_meters, latest_time)
-        except Exception as e:
-            logging.warning("Google height fetch failed (BMI will be skipped): %s", str(e))
 
         inserted_count = 0
         seen_weight_timestamps = set()
         for data_point, ts in points:
-            if ts in seen_weight_timestamps:
+            weight_time, weight_fields = parse_google_weight(data_point)
+            weight_time = weight_time or ts
+            if not weight_time or not weight_fields or weight_time in seen_weight_timestamps:
                 continue
-            seen_weight_timestamps.add(ts)
-            weight_fields = data_point.get("weight", {})
-            # API returns weightGrams, convert to kg
-            weight_grams = extract_first_numeric(weight_fields.get("weightGrams"))
-            weight_kg = weight_grams / 1000 if weight_grams is not None else None
-            # Store as pounds to match Fitbit API behaviour (dashboard converts lbs→kg)
-            weight_lbs = weight_kg * 2.205 if weight_kg is not None else None
-            bmi = round(weight_kg / (height_meters ** 2), 2) if (weight_kg is not None and height_meters) else None
-            if weight_lbs is not None:
-                collected_records.append({
-                    "measurement": "weight",
-                    "time": ts,
-                    "tags": {"Device": DEVICENAME},
-                    "fields": {
-                        "value": float(weight_lbs),      # pounds — matches existing Grafana dashboard
-                        "weightKg": float(weight_kg),     # kg — for future metric display
-                        "weightLbs": float(weight_lbs),   # explicit lbs field
-                    },
-                })
-                inserted_count += 1
+            seen_weight_timestamps.add(weight_time)
+            collected_records.append({
+                "measurement": "weight",
+                "time": weight_time,
+                "fields": weight_fields,
+            })
+            inserted_count += 1
+
+            weight_dt = datetime.fromisoformat(weight_time.replace("Z", "+00:00"))
+            eligible_heights = [sample for sample in height_samples if sample[0] <= weight_dt]
+            height_meters = eligible_heights[-1][1] if eligible_heights else None
+            bmi = calculate_bmi(weight_fields.get("weightKg"), height_meters)
             if bmi is not None:
                 collected_records.append({
                     "measurement": "bmi",
-                    "time": ts,
-                    "tags": {"Device": DEVICENAME},
-                    "fields": {"value": float(bmi)},
+                    "time": weight_time,
+                    "fields": {
+                        "value": bmi,
+                        "weightKg": weight_fields.get("weightKg"),
+                        "heightMeters": height_meters,
+                        "isCalculated": True,
+                    },
                 })
                 inserted_count += 1
         if inserted_count:
@@ -1136,11 +1315,10 @@ def get_daily_data_limit_100d(start_date_str, end_date_str):
     # No efficiency field — computed as minutesAsleep/minutesInSleepPeriod * 100
     # All minute values returned as strings, not ints
     if HEALTH_API_PROVIDER == "google":
-        sleep_level_mapping = {'AWAKE': 3, 'REM': 2, 'LIGHT': 1, 'DEEP': 0, 'UNKNOWN': 4}
         try:
             points = get_google_datapoints_for_date_range("sleep", start_date_str, end_date_str)
         except requests.exceptions.HTTPError as e:
-            logging.error("Google Sleep fetch failed: %s", str(e))
+            log_metric_http_error("Google sleep", e)
             points = []
         inserted_count = 0
         for data_point, ts in points:
@@ -1161,16 +1339,19 @@ def get_daily_data_limit_100d(start_date_str, end_date_str):
             minutes_rem         = stages_map.get("REM", 0)
             minutes_deep        = stages_map.get("DEEP", 0)
 
-            # Compute efficiency: minutesAsleep / minutesInSleepPeriod * 100
-            efficiency = round(minutes_asleep / minutes_in_period * 100) if minutes_in_period > 0 else 0
-
-            is_main_sleep = sleep.get("metadata", {}).get("processed", True)
+            efficiency = sleep_efficiency(minutes_asleep, minutes_in_period, summary.get("efficiency"))
+            is_main_sleep = str(bool(sleep.get("metadata", {}).get("processed", True))).lower()
+            sleep_session_id = stable_resource_id(data_point.get("name"))
+            interval = sleep.get("interval", {})
+            start_time_str = interval.get("startTime") or ts
+            session_end_time_str = interval.get("endTime")
 
             collected_records.append({
                 "measurement": "Sleep Summary",
-                "time": ts,
+                "time": start_time_str,
                 "tags": {"Device": DEVICENAME, "isMainSleep": is_main_sleep},
-                "fields": {
+                "fields": sanitize_fields({
+                    "SleepSessionId":        sleep_session_id,
                     "efficiency":            efficiency,
                     "minutesAfterWakeup":    minutes_after_wakeup,
                     "minutesAsleep":         minutes_asleep,
@@ -1180,12 +1361,13 @@ def get_daily_data_limit_100d(start_date_str, end_date_str):
                     "minutesLight":          minutes_light,
                     "minutesREM":            minutes_rem,
                     "minutesDeep":           minutes_deep,
-                },
+                    "startTime":             start_time_str,
+                    "endTime":               session_end_time_str,
+                }),
             })
             inserted_count += 1
 
             # Sleep stage timeline from stages array
-            interval = sleep.get("interval", {})
             for stage in sleep.get("stages", []):
                 stage_time_str = stage.get("startTime")
                 if not stage_time_str:
@@ -1195,12 +1377,12 @@ def get_daily_data_limit_100d(start_date_str, end_date_str):
                     stage_ts = stage_dt.astimezone(pytz.utc).isoformat()
                 except ValueError:
                     continue
-                stage_type = stage.get("type", "UNKNOWN")
-                end_time_str = stage.get("endTime")
+                level, stage_name = sleep_stage(stage.get("type"))
+                stage_end_time_str = stage.get("endTime")
                 duration_secs = None
-                if end_time_str:
+                if stage_end_time_str:
                     try:
-                        end_dt = datetime.fromisoformat(end_time_str.replace("Z", "+00:00"))
+                        end_dt = datetime.fromisoformat(stage_end_time_str.replace("Z", "+00:00"))
                         duration_secs = int((end_dt - stage_dt).total_seconds())
                     except ValueError:
                         pass
@@ -1208,23 +1390,24 @@ def get_daily_data_limit_100d(start_date_str, end_date_str):
                     "measurement": "Sleep Levels",
                     "time": stage_ts,
                     "tags": {"Device": DEVICENAME, "isMainSleep": is_main_sleep},
-                    "fields": {
-                        "level": sleep_level_mapping.get(stage_type, 4),
+                    "fields": sanitize_fields({
+                        "SleepSessionId": sleep_session_id,
+                        "level": level,
+                        "stageName": stage_name,
                         "duration_seconds": duration_secs,
-                    },
+                    }),
                 })
 
             # Wake marker at end of sleep session
-            end_time_str = interval.get("endTime")
-            if end_time_str:
+            if session_end_time_str:
                 try:
-                    wake_dt = datetime.fromisoformat(end_time_str.replace("Z", "+00:00"))
+                    wake_dt = datetime.fromisoformat(session_end_time_str.replace("Z", "+00:00"))
                     wake_ts = wake_dt.astimezone(pytz.utc).isoformat()
                     collected_records.append({
                         "measurement": "Sleep Levels",
                         "time": wake_ts,
                         "tags": {"Device": DEVICENAME, "isMainSleep": is_main_sleep},
-                        "fields": {"level": sleep_level_mapping["AWAKE"], "duration_seconds": None},
+                        "fields": {"SleepSessionId": sleep_session_id, "level": 3, "stageName": "awake"},
                     })
                 except ValueError:
                     pass
@@ -1241,11 +1424,13 @@ def get_daily_data_limit_100d(start_date_str, end_date_str):
         for record in sleep_data:
             log_time = datetime.fromisoformat(record["startTime"])
             utc_time = LOCAL_TIMEZONE.localize(log_time).astimezone(pytz.utc).isoformat()
+            sleep_session_id = str(record.get("logId")) if record.get("logId") is not None else None
+            is_main_sleep = str(bool(record.get("isMainSleep"))).lower()
             try:
                 minutesLight = record['levels']['summary']['light']['minutes']
                 minutesREM   = record['levels']['summary']['rem']['minutes']
                 minutesDeep  = record['levels']['summary']['deep']['minutes']
-            except:
+            except KeyError:
                 minutesLight = record['levels']['summary']['asleep']['minutes']
                 minutesREM   = record['levels']['summary']['restless']['minutes']
                 minutesDeep  = 0
@@ -1255,9 +1440,10 @@ def get_daily_data_limit_100d(start_date_str, end_date_str):
                     "time": utc_time,
                     "tags": {
                         "Device": DEVICENAME,
-                        "isMainSleep": record["isMainSleep"],
+                        "isMainSleep": is_main_sleep,
                     },
-                    "fields": {
+                    "fields": sanitize_fields({
+                        'SleepSessionId': sleep_session_id,
                         'efficiency': record["efficiency"],
                         'minutesAfterWakeup': record['minutesAfterWakeup'],
                         'minutesAsleep': record['minutesAsleep'],
@@ -1266,24 +1452,28 @@ def get_daily_data_limit_100d(start_date_str, end_date_str):
                         'minutesAwake': record['minutesAwake'],
                         'minutesLight': minutesLight,
                         'minutesREM': minutesREM,
-                        'minutesDeep': minutesDeep
-                    }
+                        'minutesDeep': minutesDeep,
+                        'startTime': record.get("startTime"),
+                        'endTime': record.get("endTime"),
+                    })
                 })
  
-            sleep_level_mapping = {'wake': 3, 'rem': 2, 'light': 1, 'deep': 0, 'asleep': 1, 'restless': 2, 'awake': 3, 'unknown': 4}
-            for sleep_stage in record['levels']['data']:
-                log_time = datetime.fromisoformat(sleep_stage["dateTime"])
+            for stage in record['levels']['data']:
+                log_time = datetime.fromisoformat(stage["dateTime"])
                 utc_time = LOCAL_TIMEZONE.localize(log_time).astimezone(pytz.utc).isoformat()
+                level, stage_name = sleep_stage(stage.get("level"))
                 collected_records.append({
                         "measurement":  "Sleep Levels",
                         "time": utc_time,
                         "tags": {
                             "Device": DEVICENAME,
-                            "isMainSleep": record["isMainSleep"],
+                            "isMainSleep": is_main_sleep,
                         },
                         "fields": {
-                            'level': sleep_level_mapping[sleep_stage["level"]],
-                            'duration_seconds': sleep_stage["seconds"]
+                            'SleepSessionId': sleep_session_id,
+                            'level': level,
+                            'stageName': stage_name,
+                            'duration_seconds': stage.get("seconds"),
                         }
                     })
             wake_time = datetime.fromisoformat(record["endTime"])
@@ -1293,11 +1483,12 @@ def get_daily_data_limit_100d(start_date_str, end_date_str):
                         "time": utc_wake_time,
                         "tags": {
                             "Device": DEVICENAME,
-                            "isMainSleep": record["isMainSleep"],
+                            "isMainSleep": is_main_sleep,
                         },
                         "fields": {
-                            'level': sleep_level_mapping['wake'],
-                            'duration_seconds': None
+                            'SleepSessionId': sleep_session_id,
+                            'level': 3,
+                            'stageName': "awake",
                         }
                     })
         logging.info("Recorded Sleep data for date " + start_date_str + " to " + end_date_str)
@@ -1314,7 +1505,7 @@ def get_daily_data_limit_365d(start_date_str, end_date_str):
         try:
             points = get_google_datapoints_for_date_range("daily-resting-heart-rate", start_date_str, end_date_str)
         except requests.exceptions.HTTPError as e:
-            logging.error("Google Resting HR fetch failed: %s", str(e))
+            log_metric_http_error("Google Resting Heart Rate", e)
             points = []
         inserted_count = 0
         for data_point, ts in points:
@@ -1354,15 +1545,22 @@ def get_daily_data_limit_365d(start_date_str, end_date_str):
                 rollup_points = response.get("rollupDataPoints", []) if isinstance(response, dict) else []
                 for rp in rollup_points:
                     azm = rp.get("activeZoneMinutes", {})
-                    fields = {
-                        "Normal":   0,  # Out of Range not tracked by this endpoint
-                        "Fat Burn": int(extract_first_numeric(azm.get("sumInFatBurnHeartZone")) or 0),
-                        "Cardio":   int(extract_first_numeric(azm.get("sumInCardioHeartZone"))  or 0),
-                        "Peak":     int(extract_first_numeric(azm.get("sumInPeakHeartZone"))    or 0),
-                    }
-                    # Always write a row, even if all zeros — matches the upstream Fitbit path
-                    # and gives Grafana a continuous time series so short ranges (e.g. last 7d)
-                    # render proper daily bars instead of collapsing to a single label.
+                    fields = {}
+                    for field_name, provider_key in (
+                        ("Fat Burn", "sumInFatBurnHeartZone"),
+                        ("Cardio", "sumInCardioHeartZone"),
+                        ("Peak", "sumInPeakHeartZone"),
+                    ):
+                        value = extract_first_numeric(azm.get(provider_key)) if provider_key in azm else None
+                        if value is not None:
+                            fields[field_name] = int(value)
+                    for total_key in ("totalActiveZoneMinutes", "sumActiveZoneMinutes"):
+                        total_value = extract_first_numeric(azm.get(total_key)) if total_key in azm else None
+                        if total_value is not None:
+                            fields["TotalActiveZoneMinutes"] = int(total_value)
+                            break
+                    if not fields:
+                        continue
                     ts = LOCAL_TIMEZONE.localize(current).astimezone(pytz.utc).isoformat()
                     collected_records.append({
                         "measurement": "HR zones",
@@ -1628,7 +1826,7 @@ def get_daily_data_limit_none(start_date_str, end_date_str):
         try:
             points = get_google_datapoints_for_date_range("daily-oxygen-saturation", start_date_str, end_date_str)
         except requests.exceptions.HTTPError as e:
-            logging.error("Google daily oxygen saturation fetch failed: %s", str(e))
+            log_metric_http_error("Google daily oxygen saturation", e)
             points = []
 
         if points:
@@ -1687,7 +1885,7 @@ def get_daily_data_limit_none(start_date_str, end_date_str):
         logging.error("Recording failed : Avg SPO2 for date " + start_date_str + " to " + end_date_str)
 
 # fetches TCX GPS data
-def get_tcx_data(tcx_url, ActivityID):
+def get_tcx_data(tcx_url, ActivityID, ActivityName):
     tcx_headers = {
         "Authorization": f"Bearer {ACCESS_TOKEN}",
         "Accept": "application/x-www-form-urlencoded"
@@ -1741,10 +1939,10 @@ def get_tcx_data(tcx_url, ActivityID):
                 collected_records.append({
                         "measurement": "GPS",
                         "tags": {
-                            "ActivityID": ActivityID
+                            "ActivityName": ActivityName
                         },
                         "time": datetime.fromisoformat(time_elem.text.strip("Z")).astimezone(pytz.utc).isoformat(),
-                        "fields": fields
+                        "fields": {"ActivityId": ActivityID, **fields}
                     })
 
 # Fetches latest activities from record ( upto last 50 )
@@ -1757,7 +1955,7 @@ def fetch_latest_activities(end_date_str):
         try:
             response = request_google_data_points_list("exercise", params={"pageSize": 100})
         except requests.exceptions.HTTPError as err:
-            logging.error("Google exercise fetch failed: %s", str(err))
+            log_metric_http_error("Google exercise", err)
             response = None
 
         raw_points = response.get("dataPoints", []) if isinstance(response, dict) else []
@@ -1769,35 +1967,12 @@ def fetch_latest_activities(end_date_str):
 
         inserted_count = 0
         for data_point, ts in points:
-            exercise_payload = data_point.get("exercise", {})
-            fields = {}
-            metrics_summary = exercise_payload.get("metricsSummary", {}) if isinstance(exercise_payload, dict) else {}
-
-            active_duration_seconds = convert_google_duration_to_seconds(exercise_payload.get("activeDuration"))
-            if active_duration_seconds is not None:
-                fields["ActiveDuration"] = int(active_duration_seconds)
-                fields["duration"] = int(active_duration_seconds)
-
-            average_hr = extract_first_numeric(metrics_summary.get("averageHeartRateBeatsPerMinute"))
-            if average_hr is not None:
-                fields["AverageHeartRate"] = int(average_hr)
-
-            calories_kcal = extract_first_numeric(metrics_summary.get("caloriesKcal"))
-            if calories_kcal is not None:
-                fields["calories"] = int(calories_kcal)
-
-            steps_count = extract_first_numeric(metrics_summary.get("steps"))
-            if steps_count is not None:
-                fields["steps"] = int(steps_count)
-
-            distance_value = extract_first_numeric(metrics_summary.get("distanceMeters"))
-            if distance_value is not None:
-                fields["distance"] = float(distance_value)
-
-            extracted_activity_name = exercise_payload.get("displayName") or exercise_payload.get("exerciseType") or "Unknown-Activity"
+            start_time, fields, extracted_activity_name = parse_google_exercise(data_point)
+            if not fields:
+                continue
             collected_records.append({
                 "measurement": "Activity Records",
-                "time": ts,
+                "time": start_time or ts,
                 "tags": {
                     "ActivityName": extracted_activity_name
                 },
@@ -1812,26 +1987,33 @@ def fetch_latest_activities(end_date_str):
     TCX_record_count, TCX_record_limit = 0,10
     if recent_activities_data != None:
         for activity in recent_activities_data['activities']:
-            fields = {}
+            fields = {
+                "ActivityId": str(activity["logId"]) if activity.get("logId") is not None else None,
+                "startTime": activity.get("startTime"),
+            }
             if 'activeDuration' in activity:
-                fields['ActiveDuration'] = int(activity['activeDuration'])
+                fields['ActiveDuration'] = int(float(activity['activeDuration']) / 1000)
             if 'averageHeartRate' in activity:
                 fields['AverageHeartRate'] = int(activity['averageHeartRate'])
             if 'calories' in activity:
                 fields['calories'] = int(activity['calories'])
             if 'duration' in activity:
-                fields['duration'] = int(activity['duration'])
+                fields['duration'] = int(float(activity['duration']) / 1000)
             if 'distance' in activity:
                 fields['distance'] = float(activity['distance'])
             if 'steps' in activity:
                 fields['steps'] = int(activity['steps'])
             starttime = datetime.fromisoformat(activity['startTime'].strip("Z"))
             utc_time = starttime.astimezone(pytz.utc).isoformat()
+            if activity.get("duration") is not None:
+                fields["endTime"] = (starttime + timedelta(milliseconds=float(activity["duration"]))).isoformat()
+            fields = sanitize_fields(fields)
             try:
                 extracted_activity_name = activity['activityName']
             except KeyError as MissingKeyError:
                 extracted_activity_name = "Unknown-Activity"
-            ActivityID = utc_time + "-" + extracted_activity_name
+            ActivityID = fields.get("ActivityId") or (utc_time + "-" + extracted_activity_name)
+            fields["ActivityId"] = ActivityID
             collected_records.append({
                 "measurement": "Activity Records",
                 "time": utc_time,
@@ -1845,7 +2027,7 @@ def fetch_latest_activities(end_date_str):
                 if tcx_link and TCX_record_count <= TCX_record_limit:
                     TCX_record_count += 1
                     try:
-                        get_tcx_data(tcx_link, ActivityID)
+                        get_tcx_data(tcx_link, ActivityID, extracted_activity_name)
                         logging.info("Recorded TCX GPS data for " + tcx_link)
                     except Exception as tcx_exception:
                         logging.error("Failed to get GPS Data for " + tcx_link + " : " + str(tcx_exception))
@@ -1869,6 +2051,7 @@ if AUTO_DATE_RANGE:
     get_daily_data_limit_365d(start_date_str, end_date_str) # 8 queries
     get_daily_data_limit_none(start_date_str, end_date_str) # 1 query
     get_battery_level() # 1 query
+    get_device_metadata()
     fetch_latest_activities(end_date_str) # 1 query
     write_points_to_influxdb(collected_records)
     collected_records = []
@@ -1897,8 +2080,10 @@ else:
         write_points_to_influxdb(collected_records)
         collected_records = []
 
+    get_device_metadata()
     fetch_latest_activities(date_list[-1])
     write_points_to_influxdb(collected_records)
+    collected_records = []
     do_bulk_update(get_daily_data_limit_none, date_list[0], date_list[-1])
     for date_range in yield_dates_with_gap(date_list, 360):
         do_bulk_update(get_daily_data_limit_365d, date_range[0], date_range[1])
@@ -1923,6 +2108,7 @@ if SCHEDULE_AUTO_UPDATE:
     schedule.every(3).minutes.do( lambda : get_intraday_data_limit_1d(end_date_str, [('heart','HeartRate_Intraday','1sec'),('steps','Steps_Intraday','1min')] )) # Auto-refresh detailed HR and steps
     schedule.every(1).hours.do( lambda : get_intraday_data_limit_1d((datetime.strptime(end_date_str, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d"), [('heart','HeartRate_Intraday','1sec'),('steps','Steps_Intraday','1min')] )) # Refilling any missing data on previous day end of night due to fitbit sync delay ( see issue #10 )
     schedule.every(20).minutes.do(get_battery_level) # Auto-refresh battery level
+    schedule.every(20).minutes.do(get_device_metadata)
     schedule.every(3).hours.do(lambda : get_daily_data_limit_30d(start_date_str, end_date_str))
     schedule.every(4).hours.do(lambda : get_daily_data_limit_100d(start_date_str, end_date_str))
     schedule.every(6).hours.do( lambda : get_daily_data_limit_365d(start_date_str, end_date_str))
