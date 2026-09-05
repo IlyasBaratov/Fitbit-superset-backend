@@ -55,6 +55,9 @@ def build_context(data, window, focus):
                                    "Sleep stages reflect stored provider labels; older classic Fitbit sleep may map restless to REM."]},
     }
     for name, metric in metrics.items():
+        if len(metric["daily"]) > 14:
+            metric["daily"] = dict(list(metric["daily"].items())[-14:])
+            metric["daily_detail_note"] = "Latest 14 observed days shown; period statistics cover the full requested range."
         category = metric.pop("category")
         context.setdefault(category, {})[name] = metric
     if "sleep" in context:

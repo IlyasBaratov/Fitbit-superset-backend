@@ -12,6 +12,8 @@ UNSAFE = re.compile(
     r"(?:stop|discontinue|reduce|increase|skip|change) (?:\w+\s+){0,3}(?:medication|medicine|prescription|prescribed|treatment|dose)|"
     r"(?:take|start|prescribe) (?:\w+\s+){0,2}(?:antibiotics|medication|insulin))\b", re.I)
 METRIC_TERMS = {
+    r"\b(?:sleep duration|sleep quality|sleep efficiency|your sleep)\b": {"sleep_hours", "sleep_efficiency"},
+    r"\b(?:step count|steps)\b": {"steps"},
     r"\b(?:hrv|rmssd)\b": {"hrv_rmssd", "hrv_deep_rmssd"},
     r"\b(?:spo2|oxygen saturation)\b": {"spo2", "intraday_spo2"},
     r"\b(?:resting heart rate|resting hr)\b": {"resting_hr"},

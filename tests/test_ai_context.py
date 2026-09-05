@@ -30,3 +30,14 @@ def test_workout_context_excludes_record_ids():
     context, sufficient = build_context({"Activity Records": [{"time": "2026-09-04T00:00:00Z", "ActivityId": "secret-id", "ActivityName": "Run", "duration": 500}]}, w, ["workouts"])
     assert sufficient and "secret-id" not in json.dumps(context)
     assert "workout_summary" in context["evidence_keys"]
+
+
+def test_long_period_keeps_full_statistics_but_compacts_daily_detail():
+    from datetime import timedelta
+    w = Window(90, "UTC", datetime(2026,9,5,12,tzinfo=timezone.utc))
+    rows = [{"time": (w.now-timedelta(days=i)).isoformat(), "value": 100} for i in range(90)]
+    context, sufficient = build_context({"Total Steps": rows}, w, ["activity"])
+    metric = context["activity"]["steps"]
+    assert sufficient and metric["observed_days"] == 90
+    assert metric["recorded_period_total"] == 9000
+    assert len(metric["daily"]) == 14

@@ -233,6 +233,9 @@ def analyze(data, window):
         "training_days": len(workout_days), "consecutive_recorded_training_days": consecutive,
         "days_without_recorded_workout": window.days-len(workout_days),
         "average_duration_seconds": average([r.get("duration", r.get("ActiveDuration")) for d, r in current]),
+        "average_heart_rate_bpm": average([r.get("AverageHeartRate") for d, r in current]),
+        "total_recorded_calories": sum(r["calories"] for d, r in current if number(r.get("calories"))) if any(number(r.get("calories")) for d, r in current) else None,
+        "units": {"duration": "seconds", "ActiveDuration": "seconds", "AverageHeartRate": "bpm", "distance": "km", "calories": "kcal", "steps": "steps"},
         "frequency_by_type": dict(Counter(str(r.get("ActivityName") or "Unknown")[:80] for d, r in current)),
         "recent": recent, "recent_list_truncated": len(current) > 20,
         "coverage_note": "Missing workout records do not establish rest days. Collector fetches only the most recent 50 exercises.",
@@ -245,7 +248,11 @@ def analyze(data, window):
         center = math.atan2(sum(map(math.sin, angles)), sum(map(math.cos, angles)))*1440/(2*math.pi)
         return round(statistics.pstdev([(v-center+720) % 1440-720 for v in values]), 2)
     return {
-        "metrics": {name: {"category": specs[name][0], "sources": specs[name][1].split("|"), "unit": specs[name][2], **stats(series, window)} for name, series in daily.items() if series},
+        "metrics": {name: {"category": specs[name][0], "sources": specs[name][1].split("|"), "unit": specs[name][2],
+                           **stats(series, window),
+                           **({"recorded_period_total": sum(v for d, v in series.items() if window.start_date <= d <= window.today)}
+                              if specs[name][0] in {"activity", "workouts"} and specs[name][2] in {"steps", "minutes", "kcal", "km", "seconds"} else {})}
+                    for name, series in daily.items() if series},
         "sleep_consistency": {"bedtime_stddev_minutes": variability(bedtimes), "wake_time_stddev_minutes": variability(waketimes)},
         "workouts": workout_summary if dated else None,
     }

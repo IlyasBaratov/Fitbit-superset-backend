@@ -54,3 +54,16 @@ def test_upstream_failure_redacted_and_not_retried(context):
     with pytest.raises(GeminiUnavailable, match="temporarily unavailable"):
         service.generate(context, "question")
     assert client.models.generate_content.call_count == 1
+
+
+@pytest.mark.parametrize("score", [True, "75"])
+def test_scores_must_be_json_numbers(context, output, score):
+    output["score"] = {"activity": score}
+    with pytest.raises(InvalidAIOutput):
+        validate_response(json.dumps(output), context)
+
+
+def test_no_sleep_claim_without_sleep_evidence(context, output):
+    output["summary"] = "Your sleep quality is excellent."
+    with pytest.raises(InvalidAIOutput):
+        validate_response(json.dumps(output), context)

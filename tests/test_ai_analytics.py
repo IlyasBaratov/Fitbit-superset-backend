@@ -61,3 +61,12 @@ def test_activity_totals_and_zone_fallback(window):
     assert result["active_minutes"]["today"] == 40
     assert result["sedentary_percent"]["today"] == 60
     assert result["active_zone_minutes"]["today"] == 30
+
+
+def test_period_totals_and_workout_summary(window):
+    data = {"Total Steps": [{"time": "2026-09-04T12:00:00-07:00", "value": 100}, {"time": "2026-09-05T12:00:00-07:00", "value": 200}],
+            "Activity Records": [{"time": "2026-09-04T12:00:00-07:00", "calories": 150, "AverageHeartRate": 120}]}
+    result = analyze(data, window)
+    assert result["metrics"]["steps"]["recorded_period_total"] == 300
+    assert result["workouts"]["total_recorded_calories"] == 150
+    assert result["workouts"]["average_heart_rate_bpm"] == 120
