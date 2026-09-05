@@ -1,34 +1,71 @@
 from contextlib import asynccontextmanager
 import secrets
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.config import Settings
-
-class APIError(Exception):
-    def __init__(self, code, message, status=503):
-        self.code, self.message, self.status = code, message, status
+from app.errors import APIError
+from app.models import AnalysisRequest, AskRequest, AIResponse
 
 bearer = HTTPBearer(auto_error=False)
-def create_app(settings=None):
+
+def authenticate(request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(bearer)):
+    settings = request.app.state.settings
+    if credentials is None or not secrets.compare_digest(credentials.credentials.encode(), settings.api_token.encode()):
+        raise APIError("UNAUTHORIZED", "A valid bearer token is required.", 401)
+    return settings.user_id
+
+
+def create_app(settings=None, influx=None, gemini=None, clock=None):
     @asynccontextmanager
     async def lifespan(app):
-        app.state.settings = settings or Settings.from_env()
-        yield
+        from app.services.influx_service import InfluxService
+        from app.services.gemini_service import GeminiService
+        from app.services.analysis_service import AnalysisService
+        cfg = settings or Settings.from_env()
+        app.state.settings = cfg
+        db = influx or InfluxService(cfg)
+        ai = gemini or GeminiService(cfg)
+        app.state.analysis = AnalysisService(cfg, db, ai, clock)
+        try:
+            yield
+        finally:
+            if influx is None:
+                db.close()
+            if gemini is None:
+                ai.close()
     app = FastAPI(title="Wearable AI API", lifespan=lifespan)
+
     @app.exception_handler(APIError)
     async def error_handler(request, exc):
-        return JSONResponse(status_code=exc.status, content={"error": exc.code, "message": exc.message})
+        return JSONResponse(status_code=exc.status, content={"error": exc.code, "message": exc.message},
+                            headers={"WWW-Authenticate": "Bearer"} if exc.status == 401 else None)
+
     @app.get("/health")
     def health():
         return {"status": "ok"}
-    return app
 
-from fastapi import Request
-def authenticate(request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(bearer)):
-    settings = request.app.state.settings
-    if credentials is None or not secrets.compare_digest(credentials.credentials, settings.api_token):
-        raise APIError("UNAUTHORIZED", "A valid bearer token is required.", 401)
-    return settings.user_id
+    @app.post("/api/ai/analyze", response_model=AIResponse)
+    def analyze(body: AnalysisRequest, request: Request, user=Depends(authenticate)):
+        return request.app.state.analysis.run(body, "analyze", user)
+
+    @app.post("/api/ai/ask", response_model=AIResponse)
+    def ask(body: AskRequest, request: Request, user=Depends(authenticate)):
+        return request.app.state.analysis.run(body, "ask", user)
+
+    def specialized(endpoint):
+        def route(body: AnalysisRequest, request: Request, user=Depends(authenticate)):
+            return request.app.state.analysis.run(body, endpoint, user)
+        route.__name__ = "analyze_" + endpoint
+        return route
+
+    for endpoint in ("sleep", "activity", "workouts", "recovery"):
+        app.add_api_route("/api/ai/"+endpoint, specialized(endpoint), methods=["POST"], response_model=AIResponse)
+
+    @app.post("/api/ai/test")
+    def connection_test(request: Request, user=Depends(authenticate)):
+        return request.app.state.analysis.check()
+
+    return app
 
 app = create_app()
