@@ -257,3 +257,10 @@ python -m pytest
 ## License
 
 This repository does not currently declare a license in the project metadata. Check the repository root and upstream project documentation for any licensing terms before redistribution or commercial use.
+
+## AI analytics REST API
+
+The independent FastAPI backend provides authenticated Gemini-powered sleep,
+activity, workout, recovery, and natural-language analysis of stored InfluxDB 1.x
+data. See [AI backend setup, endpoints, tests, and limitations](docs/AI_BACKEND.md).
+The collector and its existing ingestion behavior remain unchanged.

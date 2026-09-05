@@ -1,6 +1,48 @@
 name: fitbit-superset-backend
 
 services:
+  ai-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: fitbit-ai-api:latest
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      AI_API_TOKEN: "${AI_API_TOKEN:-}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      MODEL_NAME: "${MODEL_NAME:-}"
+      GEMINI_MODEL: "${GEMINI_MODEL:-}"
+      AI_DEFAULT_ANALYSIS_DAYS: "${AI_DEFAULT_ANALYSIS_DAYS:-7}"
+      AI_MAX_ANALYSIS_DAYS: "${AI_MAX_ANALYSIS_DAYS:-90}"
+      USER_ID: "${USER_ID:-user_001}"
+      HEALTH_API_PROVIDER: "${HEALTH_API_PROVIDER:-fitbit}"
+      DEVICE_ID: "${DEVICE_ID:-fitbit_air_001}"
+      LOCAL_TIMEZONE: "${LOCAL_TIMEZONE:-Automatic}"
+      TZ: "${TZ:-America/Los_Angeles}"
+      INFLUXDB_HOST: influxdb
+      INFLUXDB_PORT: "8086"
+      INFLUXDB_DATABASE: "${INFLUXDB_DATABASE:-FitbitHealthStats}"
+      INFLUXDB_USERNAME: "${INFLUXDB_USERNAME:-fitbit_user}"
+      INFLUXDB_PASSWORD: "${INFLUXDB_PASSWORD:-fitbit_password}"
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 15s
+
   fitbit-fetch-data:
     build:
       context: .
