@@ -1,3 +1,4 @@
+from app.core.logging import configure_logging
 from app.core.config import WorkerSettings
 import base64, requests, schedule, time, json, pytz, logging, os, sys
 from dotenv import load_dotenv
@@ -1887,19 +1888,9 @@ def main():
     LOG_LEVEL = settings.log_level
     ACCESS_TOKEN = ""
 
-    if OVERWRITE_LOG_FILE:
-        with open(FITBIT_LOG_FILE_PATH, "w"): pass
-
-    logging.basicConfig(
-        level=LOG_LEVEL,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.FileHandler(FITBIT_LOG_FILE_PATH, mode='a'),
-            logging.StreamHandler(sys.stdout)
-        ]
-    )
-
-    logging.info("Logging level set to %s", LOG_LEVEL_NAME)
+    configure_logging(LOG_LEVEL, FITBIT_LOG_FILE_PATH,
+                      secrets=(client_secret, google_client_secret, INFLUXDB_PASSWORD, INFLUXDB_TOKEN, INFLUXDB_V3_ACCESS_TOKEN),
+                      overwrite=OVERWRITE_LOG_FILE)
 
     ACCESS_TOKEN = Get_New_Access_Token(client_id, client_secret)
 

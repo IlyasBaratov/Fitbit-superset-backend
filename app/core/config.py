@@ -1,3 +1,4 @@
+from app.core.exceptions import ConfigurationError
 from dataclasses import dataclass, field
 import os
 from dotenv import load_dotenv
@@ -128,13 +129,15 @@ class WorkerSettings:
         OVERWRITE_LOG_FILE = True
         FITBIT_LANGUAGE = 'en_US'
         HEALTH_API_PROVIDER = (os.environ.get("HEALTH_API_PROVIDER") or "fitbit").strip().lower()
-        assert HEALTH_API_PROVIDER in ["fitbit", "google"], "HEALTH_API_PROVIDER must be either 'fitbit' or 'google'"
+        if HEALTH_API_PROVIDER not in {"fitbit", "google"}:
+            raise ConfigurationError("HEALTH_API_PROVIDER must be fitbit or google")
         FITBIT_API_BASE_URL = "https://api.fitbit.com"
         GOOGLE_HEALTH_BASE_URL = os.environ.get("GOOGLE_HEALTH_BASE_URL") or "https://health.googleapis.com"
         GOOGLE_HEALTH_API_VERSION = os.environ.get("GOOGLE_HEALTH_API_VERSION") or "v4"
         GOOGLE_OAUTH_TOKEN_URL = os.environ.get("GOOGLE_OAUTH_TOKEN_URL") or "https://oauth2.googleapis.com/token"
         INFLUXDB_VERSION = os.environ.get("INFLUXDB_VERSION") or "1"
-        assert INFLUXDB_VERSION in ['1','2','3'], "Only InfluxDB version 1 or 2 or 3 is allowed - please put either 1 or 2 or 3"
+        if INFLUXDB_VERSION not in {"1", "2", "3"}:
+            raise ConfigurationError("INFLUXDB_VERSION must be 1, 2 or 3")
         INFLUXDB_HOST = os.environ.get("INFLUXDB_HOST") or 'localhost'
         INFLUXDB_PORT = int(os.environ.get("INFLUXDB_PORT") or "8086")
         INFLUXDB_USERNAME = os.environ.get("INFLUXDB_USERNAME") or 'your_influxdb_username'
@@ -168,7 +171,6 @@ class WorkerSettings:
         LOG_LEVEL_NAME = (os.environ.get("LOG_LEVEL") or "DEBUG").strip().upper()
         LOG_LEVEL = getattr(logging, LOG_LEVEL_NAME, None)
         if not isinstance(LOG_LEVEL, int):
-            print(f"Invalid LOG_LEVEL '{LOG_LEVEL_NAME}'. Falling back to DEBUG.")
             LOG_LEVEL = logging.DEBUG
             LOG_LEVEL_NAME = "DEBUG"
         return cls(
