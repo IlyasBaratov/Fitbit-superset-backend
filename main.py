@@ -1,3 +1,4 @@
+from app.providers.http import ProviderHTTPClient, log_metric_http_error
 from app.providers.google_health.auth import GoogleTokenManager
 from app.providers.fitbit.auth import FitbitTokenManager
 from app.storage.influx.repository import InfluxHealthRepository
@@ -26,45 +27,7 @@ from health_schema import (
 
 
 def get_default_auth_headers():
-    if HEALTH_API_PROVIDER == "fitbit":
-        return {
-            "Authorization": f"Bearer {ACCESS_TOKEN}",
-            "Accept": "application/json",
-            "Accept-Language": FITBIT_LANGUAGE
-        }
-    return {
-        "Authorization": f"Bearer {ACCESS_TOKEN}",
-        "Accept": "application/json"
-    }
-
-
-def get_retry_after_seconds(response):
-    # Fitbit and Google use different rate-limit headers; prefer standard Retry-After first.
-    retry_after_header = response.headers.get("Retry-After")
-    if retry_after_header:
-        try:
-            return max(0, int(retry_after_header))
-        except ValueError:
-            pass
-
-    fitbit_reset_header = response.headers.get("Fitbit-Rate-Limit-Reset")
-    if fitbit_reset_header:
-        try:
-            return max(0, int(fitbit_reset_header)) + 300
-        except ValueError:
-            pass
-
-    return 120
-
-
-def log_metric_http_error(metric_name, error):
-    status_code = error.response.status_code if error.response is not None else None
-    if status_code == 403:
-        logging.warning("%s unavailable: missing provider permission or device capability (HTTP 403)", metric_name)
-    elif status_code == 404:
-        logging.warning("%s unavailable: unsupported provider metric or endpoint (HTTP 404)", metric_name)
-    else:
-        logging.error("%s failed due to provider HTTP error%s", metric_name, f" {status_code}" if status_code else "")
+    return {"Authorization": "Bearer " + token_manager.get_access_token(), "Accept": "application/json"}
 
 
 def get_google_health_api_url(path):
@@ -342,73 +305,7 @@ def get_google_datapoints_for_date_range(data_type, start_date_str, end_date_str
 
 
 def request_data_from_fitbit(url, headers=None, params=None, data=None, request_type="get", suppress_http_error_log=False):
-    global ACCESS_TOKEN
-    headers = headers or {}
-    params = params or {}
-    data = data or {}
-    logging.debug("Requesting data from provider '%s' via URL: %s", HEALTH_API_PROVIDER, url)
-    if HEALTH_API_PROVIDER == "google" and url.startswith(FITBIT_API_BASE_URL):
-        raise NotImplementedError("Google provider is enabled but this endpoint is still Fitbit-only. Migrate the caller to a Google Health endpoint first.")
-
-    for retry_attempt in range(REQUEST_MAX_RETRIES + 1):
-        if request_type == "get" and headers == {}:
-            headers = get_default_auth_headers()
-        try:
-            if request_type == "get":
-                response = requests.get(url, headers=headers, params=params, data=data, timeout=REQUEST_TIMEOUT_SECONDS)
-            elif request_type == "post":
-                response = requests.post(url, headers=headers, params=params, data=data, timeout=REQUEST_TIMEOUT_SECONDS)
-            else:
-                raise ValueError("Invalid request type " + str(request_type))
-        
-            if response.status_code == 200: # Success
-                if url.endswith(".tcx"): # TCX XML file for GPS data
-                    return response
-                else:
-                    return response.json()
-            elif response.status_code == 429: # API Limit reached
-                retry_after = get_retry_after_seconds(response)
-                if retry_attempt >= REQUEST_MAX_RETRIES:
-                    logging.error("Provider rate limit retry budget exhausted for %s", url)
-                    response.raise_for_status()
-                logging.warning("API limit reached for provider '%s'. Error code: %s, retrying in %s seconds", HEALTH_API_PROVIDER, response.status_code, retry_after)
-                time.sleep(min(retry_after, 300))
-            elif response.status_code == 401: # Access token expired ( most likely )
-                if retry_attempt >= EXPIRED_TOKEN_MAX_RETRY:
-                    logging.error("OAuth refresh retry budget exhausted for provider '%s'", HEALTH_API_PROVIDER)
-                    response.raise_for_status()
-                logging.warning("Access token rejected for provider '%s'; refreshing", HEALTH_API_PROVIDER)
-                ACCESS_TOKEN = Get_New_Access_Token(client_id, client_secret)
-                headers["Authorization"] = f"Bearer {ACCESS_TOKEN}" # Update the renewed ACCESS_TOKEN to the headers dict
-            elif response.status_code in [500, 502, 503, 504]: # Fitbit server is down or not responding ( most likely ):
-                if retry_attempt >= SERVER_ERROR_MAX_RETRY:
-                    logging.error("Provider server retry budget exhausted for %s", url)
-                    if SKIP_REQUEST_ON_SERVER_ERROR:
-                        logging.warning("Skipping metric after repeated provider server failures: %s", url)
-                        return None
-                    response.raise_for_status()
-                wait_seconds = min(30 * (retry_attempt + 1), 120)
-                logging.warning("Temporary provider server failure HTTP %s; retrying in %s seconds", response.status_code, wait_seconds)
-                time.sleep(wait_seconds)
-            elif response.status_code in (403, 404):
-                category = "missing permission or unsupported metric" if response.status_code == 403 else "unsupported metric or endpoint"
-                if not suppress_http_error_log:
-                    logging.warning("Provider returned HTTP %s (%s) for %s", response.status_code, category, url)
-                response.raise_for_status()
-            else:
-                if not suppress_http_error_log:
-                    logging.error("Provider request failed with HTTP %s for %s", response.status_code, url)
-                response.raise_for_status()
-
-        except (ConnectionError, requests.exceptions.Timeout) as e:
-            if retry_attempt >= REQUEST_MAX_RETRIES:
-                logging.error("Network retry budget exhausted for provider '%s'", HEALTH_API_PROVIDER)
-                raise
-            wait_seconds = min(5 * (retry_attempt + 1), 30)
-            logging.warning("Provider network error; retrying in %s seconds: %s", wait_seconds, e)
-            time.sleep(wait_seconds)
-
-    raise RuntimeError("Provider request retry loop exhausted")
+    return transport.request(url, headers=headers, params=params, data=data, request_type=request_type, suppress_http_error_log=suppress_http_error_log)
 
 
 def Get_New_Access_Token(client_id, client_secret):
@@ -1542,7 +1439,7 @@ def get_daily_data_limit_none(start_date_str, end_date_str):
 
 def get_tcx_data(tcx_url, ActivityID, ActivityName):
     tcx_headers = {
-        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "Authorization": "Bearer " + token_manager.get_access_token(),
         "Accept": "application/x-www-form-urlencoded"
     }
     tcx_params = {
@@ -1693,7 +1590,7 @@ def fetch_latest_activities(end_date_str):
 
 def main():
     """Run the legacy worker explicitly; importing this module is safe."""
-    global token_manager, repository, ACCESS_TOKEN, AUTO_DATE_RANGE, DEVICENAME, DEVICE_ID, DEVICE_METADATA_STATE_PATH, DRY_RUN_MODE, EXPIRED_TOKEN_MAX_RETRY, FITBIT_API_BASE_URL, FITBIT_LANGUAGE, FITBIT_LOG_FILE_PATH, GOOGLE_DEVICE_METADATA, GOOGLE_HEALTH_API_VERSION, GOOGLE_HEALTH_BASE_URL, GOOGLE_OAUTH_TOKEN_URL, HEALTH_API_PROVIDER, INFLUXDB_BUCKET, INFLUXDB_DATABASE, INFLUXDB_HOST, INFLUXDB_ORG, INFLUXDB_PASSWORD, INFLUXDB_PORT, INFLUXDB_TOKEN, INFLUXDB_URL, INFLUXDB_USERNAME, INFLUXDB_V3_ACCESS_TOKEN, INFLUXDB_VERSION, LOCAL_TIMEZONE, LOG_LEVEL, LOG_LEVEL_NAME, MANUAL_END_DATE, MANUAL_START_DATE, OVERWRITE_LOG_FILE, PENDING_DEVICE_METADATA_SIGNATURE, REQUEST_MAX_RETRIES, REQUEST_TIMEOUT_SECONDS, SCHEDULE_AUTO_UPDATE, SERVER_ERROR_MAX_RETRY, SKIP_REQUEST_ON_SERVER_ERROR, TOKEN_FILE_PATH, USER_ID, auto_update_date_range, client_id, client_secret, collected_records, date_list, date_range, date_str, demo_point, discovered_device_name, end_date, end_date_str, end_index, google_client_id, google_client_secret, i, influxdb_write_api, influxdbclient, single_day, start_date, start_date_str, start_index
+    global transport, token_manager, repository, AUTO_DATE_RANGE, DEVICENAME, DEVICE_ID, DEVICE_METADATA_STATE_PATH, DRY_RUN_MODE, EXPIRED_TOKEN_MAX_RETRY, FITBIT_API_BASE_URL, FITBIT_LANGUAGE, FITBIT_LOG_FILE_PATH, GOOGLE_DEVICE_METADATA, GOOGLE_HEALTH_API_VERSION, GOOGLE_HEALTH_BASE_URL, GOOGLE_OAUTH_TOKEN_URL, HEALTH_API_PROVIDER, INFLUXDB_BUCKET, INFLUXDB_DATABASE, INFLUXDB_HOST, INFLUXDB_ORG, INFLUXDB_PASSWORD, INFLUXDB_PORT, INFLUXDB_TOKEN, INFLUXDB_URL, INFLUXDB_USERNAME, INFLUXDB_V3_ACCESS_TOKEN, INFLUXDB_VERSION, LOCAL_TIMEZONE, LOG_LEVEL, LOG_LEVEL_NAME, MANUAL_END_DATE, MANUAL_START_DATE, OVERWRITE_LOG_FILE, PENDING_DEVICE_METADATA_SIGNATURE, REQUEST_MAX_RETRIES, REQUEST_TIMEOUT_SECONDS, SCHEDULE_AUTO_UPDATE, SERVER_ERROR_MAX_RETRY, SKIP_REQUEST_ON_SERVER_ERROR, TOKEN_FILE_PATH, USER_ID, auto_update_date_range, client_id, client_secret, collected_records, date_list, date_range, date_str, demo_point, discovered_device_name, end_date, end_date_str, end_index, google_client_id, google_client_secret, i, influxdb_write_api, influxdbclient, single_day, start_date, start_date_str, start_index
     settings = WorkerSettings.from_env()
     FITBIT_LOG_FILE_PATH = settings.fitbit_log_file_path
     TOKEN_FILE_PATH = settings.token_file_path
@@ -1737,14 +1634,14 @@ def main():
     DRY_RUN_MODE = settings.dry_run_mode
     LOG_LEVEL_NAME = settings.log_level_name
     LOG_LEVEL = settings.log_level
-    ACCESS_TOKEN = ""
 
     configure_logging(LOG_LEVEL, FITBIT_LOG_FILE_PATH,
                       secrets=(client_secret, google_client_secret, INFLUXDB_PASSWORD, INFLUXDB_TOKEN, INFLUXDB_V3_ACCESS_TOKEN),
                       overwrite=OVERWRITE_LOG_FILE)
 
     token_manager = FitbitTokenManager(settings) if HEALTH_API_PROVIDER == "fitbit" else GoogleTokenManager(settings)
-    ACCESS_TOKEN = Get_New_Access_Token(client_id, client_secret)
+    token_manager.refresh()
+    transport = ProviderHTTPClient(settings, token_manager)
 
     repository = InfluxHealthRepository(settings, build_common_tags(USER_ID, HEALTH_API_PROVIDER, DEVICENAME, DEVICE_ID), "UTC")
 
