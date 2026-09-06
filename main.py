@@ -1,3 +1,4 @@
+from app.providers.fitbit.client import FitbitClient
 from app.providers.google_health import parsing as google_parsing
 from app.providers.google_health.parsing import extract_first_numeric, extract_numeric_fields, get_google_payload_key, get_google_datapoint_payload, convert_google_duration_to_seconds, get_google_datapoint_date_string
 from app.providers.google_health.client import GoogleHealthClient
@@ -110,7 +111,7 @@ def write_points_to_influxdb(points):
 
 def get_user_timezone_name():
     if HEALTH_API_PROVIDER == "fitbit":
-        profile_data = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1/user/-/profile.json")
+        profile_data = fitbit_client.profile()
         return profile_data["user"]["timezone"]
 
     return google_client.get_timezone_name()
@@ -155,7 +156,7 @@ def get_device_metadata():
         })
     else:
         try:
-            devices = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1/user/-/devices.json") or []
+            devices = fitbit_client.devices() or []
         except requests.exceptions.HTTPError as error:
             logging.warning("Device metadata unavailable for Fitbit: %s", error)
             devices = []
@@ -203,7 +204,7 @@ def get_battery_level():
         logging.warning("Battery level endpoint is not mapped for Google Health API yet. Skipping DeviceBatteryLevel update.")
         return
 
-    device = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1/user/-/devices.json")[0]
+    device = fitbit_client.devices()[0]
     if device != None:
         collected_records.append({
             "measurement": "DeviceBatteryLevel",
@@ -262,7 +263,7 @@ def get_intraday_data_limit_1d(date_str, measurement_list):
         return
 
     for measurement in measurement_list:
-        data = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1/user/-/activities/{measurement[0]}/date/{date_str}/1d/{measurement[2]}.json")["activities-" + measurement[0] + "-intraday"]['dataset']
+        data = fitbit_client.intraday(measurement[0], date_str, measurement[2])["activities-" + measurement[0] + "-intraday"]['dataset']
         if data != None:
             for value in data:
                 log_time = datetime.fromisoformat(date_str + "T" + value['time'])
@@ -479,7 +480,7 @@ def get_daily_data_limit_30d(start_date_str, end_date_str):
         return  # ← Google path done, skip Fitbit code below
  
     # --- Original Fitbit path (unchanged) ---
-    hrv_data_list = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1/user/-/hrv/date/{start_date_str}/{end_date_str}.json").get('hrv')
+    hrv_data_list = fitbit_client.hrv(start_date_str, end_date_str).get('hrv')
     if hrv_data_list != None:
         for data in hrv_data_list:
             log_time = datetime.fromisoformat(data["dateTime"] + "T" + "00:00:00")
@@ -500,7 +501,7 @@ def get_daily_data_limit_30d(start_date_str, end_date_str):
         logging.error("Recording failed HRV for date " + start_date_str + " to " + end_date_str)
  
     try:
-        br_response = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1/user/-/br/date/{start_date_str}/{end_date_str}.json")
+        br_response = fitbit_client.breathing(start_date_str, end_date_str)
         br_data_list = br_response.get("br") if br_response else None
     except requests.exceptions.HTTPError as e:
         if e.response is not None and e.response.status_code == 403:
@@ -526,7 +527,7 @@ def get_daily_data_limit_30d(start_date_str, end_date_str):
     else:
         logging.warning("Records not found : BR for date " + start_date_str + " to " + end_date_str)
  
-    skin_temp_data_list = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1/user/-/temp/skin/date/{start_date_str}/{end_date_str}.json").get("tempSkin")
+    skin_temp_data_list = fitbit_client.skin_temperature(start_date_str, end_date_str).get("tempSkin")
     if skin_temp_data_list != None:
         for temp_record in skin_temp_data_list:
             log_time = datetime.fromisoformat(temp_record["dateTime"] + "T" + "00:00:00")
@@ -546,7 +547,7 @@ def get_daily_data_limit_30d(start_date_str, end_date_str):
         logging.error("Recording failed : Skin Temperature Variation for date " + start_date_str + " to " + end_date_str)
  
     try:
-        spo2_data_list = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1/user/-/spo2/date/{start_date_str}/{end_date_str}/all.json")
+        spo2_data_list = fitbit_client.spo2_intraday(start_date_str, end_date_str)
     except requests.exceptions.HTTPError as e:
         logging.error(f"{e}")
         spo2_data_list = None
@@ -570,7 +571,7 @@ def get_daily_data_limit_30d(start_date_str, end_date_str):
     else:
         logging.error("Recording failed : SPO2 intraday for date " + start_date_str + " to " + end_date_str)
  
-    weight_data_list = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1/user/-/body/log/weight/date/{start_date_str}/{end_date_str}.json").get("weight")
+    weight_data_list = fitbit_client.weight(start_date_str, end_date_str).get("weight")
     if weight_data_list != None:
         for entry in weight_data_list:
             log_time = datetime.fromisoformat(entry["date"] + "T" + entry["time"])
@@ -713,7 +714,7 @@ def get_daily_data_limit_100d(start_date_str, end_date_str):
         return
  
     # --- Original Fitbit path (unchanged) ---
-    sleep_data = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1.2/user/-/sleep/date/{start_date_str}/{end_date_str}.json").get("sleep")
+    sleep_data = fitbit_client.sleep(start_date_str, end_date_str).get("sleep")
     if sleep_data != None:
         for record in sleep_data:
             log_time = datetime.fromisoformat(record["startTime"])
@@ -1020,7 +1021,7 @@ def get_daily_data_limit_365d(start_date_str, end_date_str):
     # --- Original Fitbit path (unchanged) ---
     activity_minutes_list = ["minutesSedentary", "minutesLightlyActive", "minutesFairlyActive", "minutesVeryActive"]
     for activity_type in activity_minutes_list:
-        activity_minutes_data_list = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1/user/-/activities/tracker/{activity_type}/date/{start_date_str}/{end_date_str}.json").get("activities-tracker-"+activity_type)
+        activity_minutes_data_list = fitbit_client.activity_series(activity_type, start_date_str, end_date_str).get("activities-tracker-"+activity_type)
         if activity_minutes_data_list != None:
             for data in activity_minutes_data_list:
                 log_time = datetime.fromisoformat(data["dateTime"] + "T" + "00:00:00")
@@ -1041,7 +1042,7 @@ def get_daily_data_limit_365d(start_date_str, end_date_str):
  
     activity_others_list = ["distance", "calories", "steps"]
     for activity_type in activity_others_list:
-        activity_others_data_list = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1/user/-/activities/tracker/{activity_type}/date/{start_date_str}/{end_date_str}.json").get("activities-tracker-"+activity_type)
+        activity_others_data_list = fitbit_client.activity_series(activity_type, start_date_str, end_date_str).get("activities-tracker-"+activity_type)
         if activity_others_data_list != None:
             for data in activity_others_data_list:
                 log_time = datetime.fromisoformat(data["dateTime"] + "T" + "00:00:00")
@@ -1061,7 +1062,7 @@ def get_daily_data_limit_365d(start_date_str, end_date_str):
         else:
             logging.error("Recording failed : " + activity_name + " for date " + start_date_str + " to " + end_date_str)
  
-    HR_zones_data_list = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1/user/-/activities/heart/date/{start_date_str}/{end_date_str}.json").get("activities-heart")
+    HR_zones_data_list = fitbit_client.heart_summary(start_date_str, end_date_str).get("activities-heart")
     if HR_zones_data_list != None:
         for data in HR_zones_data_list:
             log_time = datetime.fromisoformat(data["dateTime"] + "T" + "00:00:00")
@@ -1094,7 +1095,7 @@ def get_daily_data_limit_365d(start_date_str, end_date_str):
     else:
         logging.error("Recording failed : RHR and HR zones for date " + start_date_str + " to " + end_date_str)
  
-    HR_zone_minutes_list = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1/user/-/activities/active-zone-minutes/date/{start_date_str}/{end_date_str}.json").get("activities-active-zone-minutes")
+    HR_zone_minutes_list = fitbit_client.active_zone_minutes(start_date_str, end_date_str).get("activities-active-zone-minutes")
     if HR_zone_minutes_list != None:
         for data in HR_zone_minutes_list:
             log_time = datetime.fromisoformat(data["dateTime"] + "T" + "00:00:00")
@@ -1152,7 +1153,7 @@ def get_daily_data_limit_none(start_date_str, end_date_str):
         return
 
     try:
-        data_list = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1/user/-/spo2/date/{start_date_str}/{end_date_str}.json")
+        data_list = fitbit_client.spo2(start_date_str, end_date_str)
     except requests.exceptions.HTTPError as e:
         logging.error(f"{e}")
         data_list = None
@@ -1185,7 +1186,7 @@ def get_tcx_data(tcx_url, ActivityID, ActivityName):
     tcx_params = {
             'includePartialTCX': 'false'
         }
-    response = request_data_from_fitbit(tcx_url, headers=tcx_headers, params=tcx_params)
+    response = fitbit_client.tcx(tcx_url, headers=tcx_headers, params=tcx_params)
     if response.status_code != 200:
         logging.error(f"Error fetching TCX file: {response.status_code}, {response.text}")
     else:
@@ -1275,7 +1276,7 @@ def fetch_latest_activities(end_date_str):
         return
 
     next_end_date_str = (datetime.strptime(end_date_str, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
-    recent_activities_data = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1/user/-/activities/list.json", params={'beforeDate': next_end_date_str, 'sort':'desc', 'limit':50, 'offset':0})
+    recent_activities_data = fitbit_client.activities(params={'beforeDate': next_end_date_str, 'sort': 'desc', 'limit': 50, 'offset': 0})
     TCX_record_count, TCX_record_limit = 0,10
     if recent_activities_data != None:
         for activity in recent_activities_data['activities']:
@@ -1330,7 +1331,7 @@ def fetch_latest_activities(end_date_str):
 
 def main():
     """Run the legacy worker explicitly; importing this module is safe."""
-    global google_client, transport, token_manager, repository, AUTO_DATE_RANGE, DEVICENAME, DEVICE_ID, DEVICE_METADATA_STATE_PATH, DRY_RUN_MODE, EXPIRED_TOKEN_MAX_RETRY, FITBIT_API_BASE_URL, FITBIT_LANGUAGE, FITBIT_LOG_FILE_PATH, GOOGLE_DEVICE_METADATA, GOOGLE_HEALTH_API_VERSION, GOOGLE_HEALTH_BASE_URL, GOOGLE_OAUTH_TOKEN_URL, HEALTH_API_PROVIDER, INFLUXDB_BUCKET, INFLUXDB_DATABASE, INFLUXDB_HOST, INFLUXDB_ORG, INFLUXDB_PASSWORD, INFLUXDB_PORT, INFLUXDB_TOKEN, INFLUXDB_URL, INFLUXDB_USERNAME, INFLUXDB_V3_ACCESS_TOKEN, INFLUXDB_VERSION, LOCAL_TIMEZONE, LOG_LEVEL, LOG_LEVEL_NAME, MANUAL_END_DATE, MANUAL_START_DATE, OVERWRITE_LOG_FILE, PENDING_DEVICE_METADATA_SIGNATURE, REQUEST_MAX_RETRIES, REQUEST_TIMEOUT_SECONDS, SCHEDULE_AUTO_UPDATE, SERVER_ERROR_MAX_RETRY, SKIP_REQUEST_ON_SERVER_ERROR, TOKEN_FILE_PATH, USER_ID, auto_update_date_range, client_id, client_secret, collected_records, date_list, date_range, date_str, demo_point, discovered_device_name, end_date, end_date_str, end_index, google_client_id, google_client_secret, i, influxdb_write_api, influxdbclient, single_day, start_date, start_date_str, start_index
+    global fitbit_client, google_client, transport, token_manager, repository, AUTO_DATE_RANGE, DEVICENAME, DEVICE_ID, DEVICE_METADATA_STATE_PATH, DRY_RUN_MODE, EXPIRED_TOKEN_MAX_RETRY, FITBIT_API_BASE_URL, FITBIT_LANGUAGE, FITBIT_LOG_FILE_PATH, GOOGLE_DEVICE_METADATA, GOOGLE_HEALTH_API_VERSION, GOOGLE_HEALTH_BASE_URL, GOOGLE_OAUTH_TOKEN_URL, HEALTH_API_PROVIDER, INFLUXDB_BUCKET, INFLUXDB_DATABASE, INFLUXDB_HOST, INFLUXDB_ORG, INFLUXDB_PASSWORD, INFLUXDB_PORT, INFLUXDB_TOKEN, INFLUXDB_URL, INFLUXDB_USERNAME, INFLUXDB_V3_ACCESS_TOKEN, INFLUXDB_VERSION, LOCAL_TIMEZONE, LOG_LEVEL, LOG_LEVEL_NAME, MANUAL_END_DATE, MANUAL_START_DATE, OVERWRITE_LOG_FILE, PENDING_DEVICE_METADATA_SIGNATURE, REQUEST_MAX_RETRIES, REQUEST_TIMEOUT_SECONDS, SCHEDULE_AUTO_UPDATE, SERVER_ERROR_MAX_RETRY, SKIP_REQUEST_ON_SERVER_ERROR, TOKEN_FILE_PATH, USER_ID, auto_update_date_range, client_id, client_secret, collected_records, date_list, date_range, date_str, demo_point, discovered_device_name, end_date, end_date_str, end_index, google_client_id, google_client_secret, i, influxdb_write_api, influxdbclient, single_day, start_date, start_date_str, start_index
     settings = WorkerSettings.from_env()
     FITBIT_LOG_FILE_PATH = settings.fitbit_log_file_path
     TOKEN_FILE_PATH = settings.token_file_path
@@ -1383,6 +1384,7 @@ def main():
     token_manager.refresh()
     transport = ProviderHTTPClient(settings, token_manager)
     google_client = GoogleHealthClient(settings, transport)
+    fitbit_client = FitbitClient(settings, transport)
 
     repository = InfluxHealthRepository(settings, build_common_tags(USER_ID, HEALTH_API_PROVIDER, DEVICENAME, DEVICE_ID), "UTC")
 
