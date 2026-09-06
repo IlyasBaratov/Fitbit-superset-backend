@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta, timezone
 from influxdb import InfluxDBClient
 from app.domain.measurements import FIELD_TYPES
-from app.core.exceptions import DataUnavailable
+from app.core.exceptions import DataUnavailable, QueryLimitExceeded
 
 MEASUREMENTS = frozenset(FIELD_TYPES) - {"GPS", "Device Metadata", "DeviceBatteryLevel"}
 INTRADAY = {"HeartRate_Intraday", "Steps_Intraday", "SPO2_Intraday"}
@@ -51,8 +51,23 @@ class InfluxService:
         except Exception:
             raise DataUnavailable("Health data could not be retrieved.") from None
         if len(rows) > MAX_ROWS:
-            raise DataUnavailable("Requested data exceeds the safe query limit; use a shorter period.")
+            raise QueryLimitExceeded("Requested data exceeds the safe query limit; use a shorter period.")
         return rows
 
     def fetch(self, measurements, start, end):
         return {name: self.query(name, start, end) for name in sorted(set(measurements))}
+
+    def latest_device_observation(self, measurement):
+        """Latest real observation for the configured identity, across Device labels."""
+        if measurement not in {"Device Metadata", "DeviceBatteryLevel"}:
+            raise ValueError("Unsupported device measurement")
+        cfg = self.settings
+        where = " AND ".join(f'"{key}" = {literal(value)}' for key, value in (
+            ("UserId", cfg.user_id), ("Provider", cfg.provider), ("DeviceId", cfg.device_id)))
+        fields = ", ".join(f'"{name}"' for name in FIELD_TYPES[measurement])
+        sql = f'SELECT {fields} FROM "{measurement}" WHERE {where} ORDER BY time DESC LIMIT 1'
+        try:
+            rows = list(self.client.query(sql).get_points())
+            return max(rows, key=lambda row: datetime.fromisoformat(row["time"].replace("Z", "+00:00"))) if rows else None
+        except Exception:
+            raise DataUnavailable("Device data could not be retrieved.") from None

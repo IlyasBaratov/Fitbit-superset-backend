@@ -8,3 +8,7 @@ def get_analysis(request: Request):
 
 def get_influx(request: Request):
     return request.app.state.influx
+
+
+def get_health(request: Request):
+    return request.app.state.health

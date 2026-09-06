@@ -8,7 +8,8 @@ from app.errors import APIError
 from app.ai.service import AnalysisService
 from app.ai.gemini import GeminiService
 from app.storage.influx.queries import InfluxService
-from app.api.routes import ai, system
+from app.api.routes import ai, system, health
+from app.api.health_service import HealthReadService
 
 
 def create_app(settings=None, influx=None, gemini=None, clock=None):
@@ -28,6 +29,7 @@ def create_app(settings=None, influx=None, gemini=None, clock=None):
             app.state.influx = db
             app.state.clock = clock
             app.state.analysis = AnalysisService(cfg, db, llm, clock)
+            app.state.health = HealthReadService(cfg, db, clock)
             yield
 
     app = FastAPI(title="Wearable AI API", lifespan=lifespan)
@@ -39,6 +41,7 @@ def create_app(settings=None, influx=None, gemini=None, clock=None):
 
     app.include_router(system.router)
     app.include_router(ai.router)
+    app.include_router(health.router)
     return app
 
 
