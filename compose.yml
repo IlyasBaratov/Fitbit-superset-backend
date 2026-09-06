@@ -46,7 +46,7 @@ services:
   fitbit-fetch-data:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.worker
     image: fitbit-superset-backend:latest
     container_name: fitbit-fetch-data
     restart: unless-stopped
@@ -62,6 +62,8 @@ services:
       MANUAL_START_DATE: "${MANUAL_START_DATE:-}"
       MANUAL_END_DATE: "${MANUAL_END_DATE:-}"
       DRY_RUN_MODE: "${DRY_RUN_MODE:-false}"
+      REQUEST_MAX_RETRIES: "${REQUEST_MAX_RETRIES:-5}"
+      REQUEST_TIMEOUT_SECONDS: "${REQUEST_TIMEOUT_SECONDS:-30}"
       INFLUXDB_VERSION: "1"
       INFLUXDB_HOST: influxdb
       INFLUXDB_PORT: "8086"

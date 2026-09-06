@@ -1,7 +1,6 @@
+# Ingestion worker runtime (Python 3.10+).
+-r requirements-common.txt
 requests
-python-dotenv
 schedule
-pytz
-influxdb
 influxdb-client
 influxdb3-python

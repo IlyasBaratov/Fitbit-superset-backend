@@ -1,5 +1,5 @@
+# Complete development/test environment; external services are mocked.
 -r requirements.txt
-pytest
-
 -r requirements-api.txt
+pytest
 httpx

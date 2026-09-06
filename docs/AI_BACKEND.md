@@ -49,7 +49,7 @@ Local development:
 
 ```powershell
 .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+.venv\Scripts\python.exe -m uvicorn app.api.main:app --host 127.0.0.1 --port 8000
 ```
 
 Stop the Docker API first if running locally on the same port. Local database access normally uses `INFLUXDB_HOST=localhost`; Compose sets it to `influxdb` inside the container. Missing API credentials or invalid timezone/day settings fail startup. `.env` is excluded from Git and Docker build context. Upstream failures are returned without credentials, raw payloads, or provider error text.

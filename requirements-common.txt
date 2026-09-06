@@ -1,0 +1,4 @@
+# Shared runtime dependencies for worker and API.
+python-dotenv>=1,<2
+pytz
+influxdb>=5.3,<6

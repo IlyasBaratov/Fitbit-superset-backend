@@ -1,7 +1,6 @@
+# FastAPI and Gemini runtime.
+-r requirements-common.txt
 fastapi>=0.115,<1
 uvicorn>=0.34,<1
 pydantic>=2.10,<3
 google-genai>=1,<2
-influxdb>=5.3,<6
-python-dotenv>=1,<2
-pytz

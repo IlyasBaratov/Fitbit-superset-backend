@@ -1,7 +1,12 @@
+# Runtime dependencies are installed through requirements*.txt, not pip install .
+# This file supplies project metadata and test configuration.
 [project]
 name = "healthapi"
 version = "0.1.0"
-description = "Add your description here"
+description = "Modular Fitbit and Google Health ingestion with InfluxDB and Gemini analytics"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.10"
 dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

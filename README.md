@@ -25,7 +25,7 @@ This project reads OAuth credentials, refreshes tokens as needed, fetches daily 
 ## Prerequisites
 
 - Docker Desktop with Docker Compose for the containerized stack
-- Python 3.14+ for local development (matching `pyproject.toml`)
+- Python 3.10+ for the worker; Python 3.14 is used by the API image and local development
 - Access to a Fitbit app or Google Cloud OAuth client
 - A running InfluxDB instance or compatible endpoint
 - A valid `.env` file with your credentials and database settings
@@ -60,13 +60,13 @@ and Grafana:
 Provider OAuth values are read from the project `.env`. Runtime logs, OAuth tokens, InfluxDB data, and Grafana data are persisted in ignored project folders.
 
 The Compose collector uses `AUTO_DATE_RANGE=true` so its detached process does
-not pause for manual date input. For a one-off manual backfill, override
+use the rolling date range. For a one-off manual backfill, override
 `AUTO_DATE_RANGE=false` and provide both manual dates on the command line.
 
 The collector image is built locally as `fitbit-superset-backend:latest`. Its
-Dockerfile inherits from `thisisarpanghosh/fitbit-fetch-data:latest`, preserving
+`Dockerfile.worker` inherits from `thisisarpanghosh/fitbit-fetch-data:latest`, preserving
 the upstream Fitbit packages and functionality while replacing the startup
-command with this repository's `/app/main.py`.
+command with `python -m app.worker.main`.
 
 Build the derived collector image:
 
@@ -119,18 +119,18 @@ docker compose logs -f grafana
 ```
 
 Verify that the derived image and running collector use this repository's
-`/app/main.py`, rather than the upstream `/app/Fitbit_Fetch.py`:
+`/app/app/worker/main.py`, rather than the upstream `/app/Fitbit_Fetch.py`:
 
 ```bash
 docker image inspect fitbit-superset-backend:latest --format '{{json .Config.Cmd}} {{.Config.WorkingDir}} {{.Config.User}}'
 docker inspect fitbit-fetch-data --format '{{json .Config.Cmd}} {{.Config.WorkingDir}} {{.Config.User}}'
 docker compose exec fitbit-fetch-data sh -c 'tr "\0" " " </proc/1/cmdline; echo; readlink -f /proc/1/cwd'
-docker compose exec fitbit-fetch-data sha256sum /app/main.py
+docker compose exec fitbit-fetch-data sha256sum /app/app/worker/main.py
 ```
 
-The expected command is `["python","main.py"]`, the working directory is
+The expected command is `["python","-m","app.worker.main"]`, the working directory is
 `/app`, and the user is `appuser`. Compare the container checksum with
-`sha256sum main.py` on Linux/macOS or `Get-FileHash .\main.py -Algorithm SHA256`
+`sha256sum app/worker/main.py` on Linux/macOS or `Get-FileHash .\app\worker\main.py -Algorithm SHA256`
 in PowerShell.
 
 Useful lifecycle commands:
@@ -184,13 +184,13 @@ For InfluxDB 2.x or 3.x, configure the matching bucket, org, token, and URL valu
 ## Running the script
 
 ```bash
-python main.py
+python -m app.worker.main
 ```
 
 If you are using `uv` in this project, you can also run:
 
 ```bash
-uv run python main.py
+uv run --no-project --with-requirements requirements.txt python -m app.worker.main
 ```
 
 ## InfluxDB measurements
@@ -264,3 +264,16 @@ The independent FastAPI backend provides authenticated Gemini-powered sleep,
 activity, workout, recovery, and natural-language analysis of stored InfluxDB 1.x
 data. See [AI backend setup, endpoints, tests, and limitations](docs/AI_BACKEND.md).
 The collector and its existing ingestion behavior remain unchanged.
+
+
+## Modular backend
+
+The worker composes typed settings, one provider/token manager/session, an Influx repository, ingestion jobs and a synchronous scheduler. Provider clients own HTTP; pure metric mappers produce `HealthPoint` values; storage owns historical field coercion. `main.py`, `health_schema.py`, `app.main`, `app.config`, `app.models` and former AI service imports remain compatibility entrypoints.
+
+API code lives under `app/api`, Gemini/analytics under `app/ai`, and ingestion under `app/ingestion`. Start the API with `uvicorn app.api.main:app`. The worker does not require API or Gemini credentials. Missing tokens, provider-mismatched token files and missing manual dates fail clearly without stdin. Keep OAuth files outside Git.
+
+`requirements-common.txt` is shared; `requirements.txt` installs the worker; `requirements-api.txt` installs the API; `requirements-dev.txt` installs both plus tests. Install these files directly; `pyproject.toml` supplies metadata and test configuration, not a replacement runtime installation recipe. No dependency upgrade is required by this refactor.
+
+Existing metric names, provider fields, identity tags, bulk window overlap and scheduling cadence remain compatible. Device signatures are saved only after acknowledged writes. Historical float/integer overrides belong to each repository instance. Corrected date handling uses local-midnight DST boundaries for Google filters and preserves UTC for Fitbit workout/TCX timestamps ending in Z.
+
+See [health read API](docs/HEALTH_API.md) for the new authenticated endpoints and [refactor contracts](docs/refactor_contracts.md) for the behavior baseline.

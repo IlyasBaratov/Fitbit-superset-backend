@@ -1,0 +1,16 @@
+FROM thisisarpanghosh/fitbit-fetch-data:latest
+
+USER root
+
+WORKDIR /app
+
+COPY --chown=appuser:appuser --chmod=0644 requirements.txt requirements-common.txt /app/
+
+RUN python -m pip install --no-cache-dir -r /app/requirements.txt
+
+COPY --chown=appuser:appuser --chmod=0644 main.py health_schema.py /app/
+COPY --chown=appuser:appuser app /app/app
+
+USER appuser
+
+CMD ["python", "-m", "app.worker.main"]
