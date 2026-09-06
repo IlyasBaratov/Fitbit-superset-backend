@@ -91,3 +91,9 @@ class FitbitProvider:
 
     def refresh_credentials(self):
         return self.client.transport.token_manager.refresh()
+
+    def close(self):
+        try:
+            self.client.transport.close()
+        finally:
+            self.client.transport.token_manager.close()
