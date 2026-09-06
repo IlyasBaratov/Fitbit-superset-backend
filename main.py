@@ -1,3 +1,6 @@
+from app.providers.google_health import parsing as google_parsing
+from app.providers.google_health.parsing import extract_first_numeric, extract_numeric_fields, get_google_payload_key, get_google_datapoint_payload, convert_google_duration_to_seconds, get_google_datapoint_date_string
+from app.providers.google_health.client import GoogleHealthClient
 from app.providers.http import ProviderHTTPClient, log_metric_http_error
 from app.providers.google_health.auth import GoogleTokenManager
 from app.providers.fitbit.auth import FitbitTokenManager
@@ -31,277 +34,49 @@ def get_default_auth_headers():
 
 
 def get_google_health_api_url(path):
-    return f"{GOOGLE_HEALTH_BASE_URL}/{GOOGLE_HEALTH_API_VERSION}/{path.lstrip('/')}"
+    google_client.timezone = globals().get("LOCAL_TIMEZONE") if hasattr(globals().get("LOCAL_TIMEZONE"), "localize") else pytz.utc
+    return google_client.get_google_health_api_url(path)
 
 
 def request_google_data_points_list(data_type, params=None, suppress_http_error_log=False):
-    endpoint = get_google_health_api_url(f"users/me/dataTypes/{data_type}/dataPoints")
-    return request_data_from_fitbit(endpoint, params=params or {}, suppress_http_error_log=suppress_http_error_log)
+    google_client.timezone = globals().get("LOCAL_TIMEZONE") if hasattr(globals().get("LOCAL_TIMEZONE"), "localize") else pytz.utc
+    return google_client.request_google_data_points_list(data_type, params, suppress_http_error_log)
 
 
 def request_google_data_points_daily_rollup(data_type, payload):
-    endpoint = get_google_health_api_url(f"users/me/dataTypes/{data_type}/dataPoints:dailyRollUp")
-    headers = get_default_auth_headers()
-    headers["Content-Type"] = "application/json"
-    return request_data_from_fitbit(endpoint, headers=headers, data=json.dumps(payload), request_type="post")
+    google_client.timezone = globals().get("LOCAL_TIMEZONE") if hasattr(globals().get("LOCAL_TIMEZONE"), "localize") else pytz.utc
+    return google_client.request_google_data_points_daily_rollup(data_type, payload)
 
 
 def request_google_data_points_rollup(data_type, payload):
-    endpoint = get_google_health_api_url(f"users/me/dataTypes/{data_type}/dataPoints:rollUp")
-    headers = get_default_auth_headers()
-    headers["Content-Type"] = "application/json"
-    return request_data_from_fitbit(endpoint, headers=headers, data=json.dumps(payload), request_type="post")
+    google_client.timezone = globals().get("LOCAL_TIMEZONE") if hasattr(globals().get("LOCAL_TIMEZONE"), "localize") else pytz.utc
+    return google_client.request_google_data_points_rollup(data_type, payload)
 
 
-def extract_first_numeric(value):
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
-        stripped = value.strip()
-        if stripped and all(ch in "+-0123456789.eE" for ch in stripped):
-            try:
-                return float(stripped)
-            except ValueError:
-                pass
-    if isinstance(value, dict):
-        for nested in value.values():
-            extracted = extract_first_numeric(nested)
-            if extracted is not None:
-                return extracted
-    if isinstance(value, list):
-        for nested in value:
-            extracted = extract_first_numeric(nested)
-            if extracted is not None:
-                return extracted
-    return None
 
 
-def extract_numeric_fields(value, key_filter=None):
-    fields = {}
-    if not isinstance(value, dict):
-        return fields
-    for key, nested in value.items():
-        if key_filter and key_filter not in key.lower():
-            continue
-        extracted = extract_first_numeric(nested)
-        if extracted is not None:
-            fields[key] = extracted
-    return fields
 
 
-def get_google_payload_key(data_type):
-    parts = data_type.split("-")
-    return parts[0] + "".join(part.capitalize() for part in parts[1:])
 
 
-def get_google_datapoint_payload(data_point, data_type):
-    payload_key = get_google_payload_key(data_type)
-    payload = data_point.get(payload_key)
-    if isinstance(payload, dict):
-        return payload
-    return {}
 
 
-def convert_google_duration_to_seconds(duration_value):
-    if duration_value is None:
-        return None
-    if isinstance(duration_value, (int, float)):
-        return float(duration_value)
-    if isinstance(duration_value, str) and duration_value.endswith("s"):
-        try:
-            return float(duration_value[:-1])
-        except ValueError:
-            return None
-    return None
 
 
-def get_google_datapoint_date_string(data_point, data_type):
-    payload = get_google_datapoint_payload(data_point, data_type)
-
-    if isinstance(payload.get("date"), dict):
-        date_value = payload["date"]
-        try:
-            return f"{int(date_value.get('year')):04d}-{int(date_value.get('month')):02d}-{int(date_value.get('day')):02d}"
-        except (TypeError, ValueError):
-            pass
-
-    interval = payload.get("interval") if isinstance(payload, dict) else None
-    if isinstance(interval, dict):
-        civil_start = interval.get("civilStartTime")
-        if isinstance(civil_start, dict):
-            date_value = civil_start.get("date")
-            if isinstance(date_value, dict):
-                try:
-                    return f"{int(date_value.get('year')):04d}-{int(date_value.get('month')):02d}-{int(date_value.get('day')):02d}"
-                except (TypeError, ValueError):
-                    pass
-
-    return None
 
 
 def parse_google_datapoint_timestamp(data_point, data_type=None):
-    payload = get_google_datapoint_payload(data_point, data_type) if data_type else {}
-
-    time_candidates = [
-        data_point.get("sampleTime"),
-        data_point.get("sample_time"),
-        data_point.get("time"),
-    ]
-
-    if isinstance(payload, dict):
-        time_candidates.extend([
-            payload.get("sampleTime"),
-            payload.get("sample_time"),
-            payload.get("time"),
-        ])
-
-    sample_time = payload.get("sampleTime") if isinstance(payload, dict) else None
-    if isinstance(sample_time, dict):
-        time_candidates.extend([
-            sample_time.get("physicalTime"),
-            sample_time.get("physical_time"),
-        ])
-
-    interval = data_point.get("interval")
-    if isinstance(interval, dict):
-        time_candidates.extend([
-            interval.get("startTime"),
-            interval.get("start_time"),
-            interval.get("civilStartTime"),
-            interval.get("civil_start_time"),
-        ])
-
-    payload_interval = payload.get("interval") if isinstance(payload, dict) else None
-    if isinstance(payload_interval, dict):
-        time_candidates.extend([
-            payload_interval.get("startTime"),
-            payload_interval.get("start_time"),
-            payload_interval.get("endTime"),
-            payload_interval.get("end_time"),
-        ])
-
-    for candidate in time_candidates:
-        if isinstance(candidate, str):
-            normalized = candidate.replace("Z", "+00:00")
-            try:
-                dt = datetime.fromisoformat(normalized)
-                if dt.tzinfo is None:
-                    dt = LOCAL_TIMEZONE.localize(dt)
-                return dt.astimezone(pytz.utc).isoformat()
-            except ValueError:
-                continue
-
-    date_str = get_google_datapoint_date_string(data_point, data_type) if data_type else None
-    if date_str:
-        dt = LOCAL_TIMEZONE.localize(datetime.strptime(date_str + "T00:00:00", "%Y-%m-%dT%H:%M:%S"))
-        return dt.astimezone(pytz.utc).isoformat()
-
-    return None
+    return google_parsing.parse_google_datapoint_timestamp(data_point, data_type, LOCAL_TIMEZONE)
 
 
 def get_google_datapoints_for_date(data_type, date_str, page_size=10000):
-    start_dt_local = LOCAL_TIMEZONE.localize(datetime.strptime(date_str, "%Y-%m-%d"))
-    end_dt_local = start_dt_local + timedelta(days=1)
-    start_iso = start_dt_local.astimezone(pytz.utc).isoformat().replace("+00:00", "Z")
-    end_iso = end_dt_local.astimezone(pytz.utc).isoformat().replace("+00:00", "Z")
-
-    filter_data_type = data_type.replace("-", "_")
-    next_date_str = (datetime.strptime(date_str, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
-
-    # Data types do not expose a uniform set of filter members.
-    if data_type in ["steps"]:
-        filters_to_try = [
-            f'{filter_data_type}.interval.start_time >= "{start_iso}" AND {filter_data_type}.interval.start_time < "{end_iso}"',
-            f'{filter_data_type}.interval.civil_start_time >= "{date_str}T00:00:00" AND {filter_data_type}.interval.civil_start_time < "{next_date_str}T00:00:00"',
-        ]
-    elif data_type in ["heart-rate", "oxygen-saturation", "weight"]:
-        filters_to_try = [
-            f'{filter_data_type}.sample_time.physical_time >= "{start_iso}" AND {filter_data_type}.sample_time.physical_time < "{end_iso}"',
-        ]
-    elif data_type in ["exercise", "sleep"]:
-        filters_to_try = [
-            f'{filter_data_type}.interval.civil_start_time >= "{date_str}T00:00:00" AND {filter_data_type}.interval.civil_start_time < "{next_date_str}T00:00:00"',
-            f'{filter_data_type}.interval.civil_end_time >= "{date_str}T00:00:00" AND {filter_data_type}.interval.civil_end_time < "{next_date_str}T00:00:00"',
-        ]
-    else:
-        # Daily and unsupported data types often reject member-based filters.
-        filters_to_try = []
-
-    # Google caps responses at ~5000 points per page regardless of pageSize, so we must
-    # follow nextPageToken to avoid silently dropping data (e.g. HR samples earlier in the day).
-    def _paginate(extra_params):
-        all_points = []
-        page_token = None
-        first = True
-        for _ in range(50):  # safety cap; one day of HR is ~17k samples → ~4 pages
-            params = dict(extra_params)
-            params["pageSize"] = page_size
-            if page_token:
-                params["pageToken"] = page_token
-            try:
-                resp = request_google_data_points_list(
-                    data_type, params=params, suppress_http_error_log=first
-                )
-            except requests.exceptions.HTTPError:
-                if first:
-                    raise
-                logging.warning("Pagination interrupted for %s; keeping %d points", data_type, len(all_points))
-                break
-            first = False
-            if not isinstance(resp, dict):
-                break
-            all_points.extend(resp.get("dataPoints", []))
-            page_token = resp.get("nextPageToken")
-            if not page_token:
-                break
-        return all_points
-
-    points = None
-    used_server_filter = False
-    for filter_expr in filters_to_try:
-        try:
-            points = _paginate({"filter": filter_expr})
-            used_server_filter = True
-            break
-        except requests.exceptions.HTTPError as error:
-            if error.response is not None and error.response.status_code in (403, 404):
-                raise
-            continue
-
-    if points is None:
-        try:
-            points = _paginate({})
-        except requests.exceptions.HTTPError:
-            raise
-    filtered = []
-    for data_point in points:
-        ts = parse_google_datapoint_timestamp(data_point, data_type)
-        if not ts:
-            continue
-
-        data_point_date = get_google_datapoint_date_string(data_point, data_type)
-        if used_server_filter:
-            filtered.append((data_point, ts))
-            continue
-
-        if data_point_date == date_str:
-            filtered.append((data_point, ts))
-            continue
-
-        if datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone(LOCAL_TIMEZONE).strftime("%Y-%m-%d") == date_str:
-            filtered.append((data_point, ts))
-    return filtered
+    google_client.timezone = globals().get("LOCAL_TIMEZONE") if hasattr(globals().get("LOCAL_TIMEZONE"), "localize") else pytz.utc
+    return google_client.get_google_datapoints_for_date(data_type, date_str, page_size)
 
 
 def get_google_datapoints_for_date_range(data_type, start_date_str, end_date_str, page_size=10000):
-    start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
-    end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
-    aggregated = []
-    current = start_date
-    while current <= end_date:
-        aggregated.extend(get_google_datapoints_for_date(data_type, current.strftime("%Y-%m-%d"), page_size=page_size))
-        current += timedelta(days=1)
-    return aggregated
+    google_client.timezone = globals().get("LOCAL_TIMEZONE") if hasattr(globals().get("LOCAL_TIMEZONE"), "localize") else pytz.utc
+    return google_client.get_google_datapoints_for_date_range(data_type, start_date_str, end_date_str, page_size)
 
 
 def request_data_from_fitbit(url, headers=None, params=None, data=None, request_type="get", suppress_http_error_log=False):
@@ -338,52 +113,17 @@ def get_user_timezone_name():
         profile_data = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1/user/-/profile.json")
         return profile_data["user"]["timezone"]
 
-    settings_data = request_data_from_fitbit(f"{GOOGLE_HEALTH_BASE_URL}/{GOOGLE_HEALTH_API_VERSION}/users/me/settings")
-    if isinstance(settings_data, dict):
-        for key in ["timezone", "timeZone", "time_zone"]:
-            if settings_data.get(key):
-                return settings_data.get(key)
-        nested_settings = settings_data.get("settings")
-        if isinstance(nested_settings, dict):
-            for key in ["timezone", "timeZone", "time_zone"]:
-                if nested_settings.get(key):
-                    return nested_settings.get(key)
-
-    logging.warning("Unable to determine timezone from Google settings response. Falling back to UTC")
-    return "UTC"
+    return google_client.get_timezone_name()
 
 
 def discover_google_device_metadata():
-    """Return actual device metadata attached to a recent Google data point."""
-    for data_type in ("heart-rate", "steps", "daily-resting-heart-rate", "weight", "exercise"):
-        try:
-            resp = request_google_data_points_list(
-                data_type, params={"pageSize": 1}, suppress_http_error_log=True
-            )
-        except requests.exceptions.HTTPError:
-            continue
-        if not isinstance(resp, dict):
-            continue
-        for dp in resp.get("dataPoints", []):
-            device = (dp.get("dataSource") or {}).get("device") or {}
-            name = device.get("displayName")
-            if name:
-                metadata = {
-                    "deviceName": name.strip(),
-                    "deviceModel": device.get("model"),
-                    "firmwareVersion": device.get("firmwareVersion"),
-                    "connectionStatus": device.get("connectionStatus"),
-                }
-                try:
-                    metadata["_observationTime"] = parse_google_datapoint_timestamp(dp, data_type)
-                except (TypeError, ValueError):
-                    metadata["_observationTime"] = None
-                return metadata
-    return {}
+    google_client.timezone = globals().get("LOCAL_TIMEZONE") if hasattr(globals().get("LOCAL_TIMEZONE"), "localize") else pytz.utc
+    return google_client.discover_google_device_metadata()
 
 
 def discover_google_device_name():
-    return discover_google_device_metadata().get("deviceName")
+    google_client.timezone = globals().get("LOCAL_TIMEZONE") if hasattr(globals().get("LOCAL_TIMEZONE"), "localize") else pytz.utc
+    return google_client.discover_google_device_name()
 
 
 def load_device_metadata_signature():
@@ -1590,7 +1330,7 @@ def fetch_latest_activities(end_date_str):
 
 def main():
     """Run the legacy worker explicitly; importing this module is safe."""
-    global transport, token_manager, repository, AUTO_DATE_RANGE, DEVICENAME, DEVICE_ID, DEVICE_METADATA_STATE_PATH, DRY_RUN_MODE, EXPIRED_TOKEN_MAX_RETRY, FITBIT_API_BASE_URL, FITBIT_LANGUAGE, FITBIT_LOG_FILE_PATH, GOOGLE_DEVICE_METADATA, GOOGLE_HEALTH_API_VERSION, GOOGLE_HEALTH_BASE_URL, GOOGLE_OAUTH_TOKEN_URL, HEALTH_API_PROVIDER, INFLUXDB_BUCKET, INFLUXDB_DATABASE, INFLUXDB_HOST, INFLUXDB_ORG, INFLUXDB_PASSWORD, INFLUXDB_PORT, INFLUXDB_TOKEN, INFLUXDB_URL, INFLUXDB_USERNAME, INFLUXDB_V3_ACCESS_TOKEN, INFLUXDB_VERSION, LOCAL_TIMEZONE, LOG_LEVEL, LOG_LEVEL_NAME, MANUAL_END_DATE, MANUAL_START_DATE, OVERWRITE_LOG_FILE, PENDING_DEVICE_METADATA_SIGNATURE, REQUEST_MAX_RETRIES, REQUEST_TIMEOUT_SECONDS, SCHEDULE_AUTO_UPDATE, SERVER_ERROR_MAX_RETRY, SKIP_REQUEST_ON_SERVER_ERROR, TOKEN_FILE_PATH, USER_ID, auto_update_date_range, client_id, client_secret, collected_records, date_list, date_range, date_str, demo_point, discovered_device_name, end_date, end_date_str, end_index, google_client_id, google_client_secret, i, influxdb_write_api, influxdbclient, single_day, start_date, start_date_str, start_index
+    global google_client, transport, token_manager, repository, AUTO_DATE_RANGE, DEVICENAME, DEVICE_ID, DEVICE_METADATA_STATE_PATH, DRY_RUN_MODE, EXPIRED_TOKEN_MAX_RETRY, FITBIT_API_BASE_URL, FITBIT_LANGUAGE, FITBIT_LOG_FILE_PATH, GOOGLE_DEVICE_METADATA, GOOGLE_HEALTH_API_VERSION, GOOGLE_HEALTH_BASE_URL, GOOGLE_OAUTH_TOKEN_URL, HEALTH_API_PROVIDER, INFLUXDB_BUCKET, INFLUXDB_DATABASE, INFLUXDB_HOST, INFLUXDB_ORG, INFLUXDB_PASSWORD, INFLUXDB_PORT, INFLUXDB_TOKEN, INFLUXDB_URL, INFLUXDB_USERNAME, INFLUXDB_V3_ACCESS_TOKEN, INFLUXDB_VERSION, LOCAL_TIMEZONE, LOG_LEVEL, LOG_LEVEL_NAME, MANUAL_END_DATE, MANUAL_START_DATE, OVERWRITE_LOG_FILE, PENDING_DEVICE_METADATA_SIGNATURE, REQUEST_MAX_RETRIES, REQUEST_TIMEOUT_SECONDS, SCHEDULE_AUTO_UPDATE, SERVER_ERROR_MAX_RETRY, SKIP_REQUEST_ON_SERVER_ERROR, TOKEN_FILE_PATH, USER_ID, auto_update_date_range, client_id, client_secret, collected_records, date_list, date_range, date_str, demo_point, discovered_device_name, end_date, end_date_str, end_index, google_client_id, google_client_secret, i, influxdb_write_api, influxdbclient, single_day, start_date, start_date_str, start_index
     settings = WorkerSettings.from_env()
     FITBIT_LOG_FILE_PATH = settings.fitbit_log_file_path
     TOKEN_FILE_PATH = settings.token_file_path
@@ -1642,6 +1382,7 @@ def main():
     token_manager = FitbitTokenManager(settings) if HEALTH_API_PROVIDER == "fitbit" else GoogleTokenManager(settings)
     token_manager.refresh()
     transport = ProviderHTTPClient(settings, token_manager)
+    google_client = GoogleHealthClient(settings, transport)
 
     repository = InfluxHealthRepository(settings, build_common_tags(USER_ID, HEALTH_API_PROVIDER, DEVICENAME, DEVICE_ID), "UTC")
 
