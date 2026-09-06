@@ -1,4 +1,5 @@
 """Acknowledge metadata signatures only after successful database writes."""
+
 import json
 import logging
 import os
@@ -9,6 +10,7 @@ from app.core.exceptions import StorageError
 
 logger = logging.getLogger(__name__)
 
+
 class DeviceMetadataState:
     def __init__(self, path, common_tags):
         self.path, self.common_tags = Path(path), dict(common_tags)
@@ -18,7 +20,10 @@ class DeviceMetadataState:
 
     def unchanged(self, signature):
         try:
-            return json.loads(self.path.read_text(encoding="utf-8")).get("signature") == signature
+            return (
+                json.loads(self.path.read_text(encoding="utf-8")).get("signature")
+                == signature
+            )
         except FileNotFoundError:
             return False
         except (OSError, ValueError, AttributeError):
@@ -29,7 +34,9 @@ class DeviceMetadataState:
         temporary = None
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=self.path.parent, delete=False) as out:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=self.path.parent, delete=False
+            ) as out:
                 temporary = out.name
                 json.dump({"signature": signature}, out)
             os.replace(temporary, self.path)

@@ -1,4 +1,5 @@
 """Historical measurement and field contracts. Do not mutate at runtime."""
+
 COMMON_TAG_KEYS = ("UserId", "Provider", "Device", "DeviceId")
 
 SLEEP_STAGE_MAPPING = {

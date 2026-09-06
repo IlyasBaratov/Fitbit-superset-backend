@@ -1,6 +1,8 @@
 """High-level collection jobs and provider-window scheduling policy."""
+
 from datetime import datetime, timedelta
 from app.ingestion.date_ranges import iter_days, iter_windows, validate_range
+
 
 class IngestionJobs:
     def __init__(self, ingestion, settings, timezone, clock=None):
@@ -9,7 +11,9 @@ class IngestionJobs:
 
     def dates(self):
         end = self.clock().astimezone(self.timezone).date()
-        return (end - timedelta(days=self.settings.auto_update_date_range)).isoformat(), end.isoformat()
+        return (
+            end - timedelta(days=self.settings.auto_update_date_range)
+        ).isoformat(), end.isoformat()
 
     def sync_intraday(self):
         return self.ingestion.sync_intraday(self.dates()[1])

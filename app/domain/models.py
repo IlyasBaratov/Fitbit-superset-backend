@@ -1,7 +1,9 @@
 """Provider-independent data transferred from ingestion to storage."""
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
+
 
 @dataclass(frozen=True)
 class HealthPoint:
@@ -12,7 +14,17 @@ class HealthPoint:
 
     @classmethod
     def from_record(cls, record):
-        return cls(record["measurement"], record["time"], dict(record["fields"]), dict(record.get("tags") or {}))
+        return cls(
+            record["measurement"],
+            record["time"],
+            dict(record["fields"]),
+            dict(record.get("tags") or {}),
+        )
 
     def as_record(self):
-        return {"measurement": self.measurement, "time": self.timestamp, "fields": dict(self.fields), "tags": dict(self.tags)}
+        return {
+            "measurement": self.measurement,
+            "time": self.timestamp,
+            "fields": dict(self.fields),
+            "tags": dict(self.tags),
+        }

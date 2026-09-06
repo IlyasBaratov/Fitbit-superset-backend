@@ -1,19 +1,26 @@
 """Google Health URLs, filtering, pagination, rollups and discovery."""
+
 from datetime import datetime, timedelta
 import json
 import logging
 import pytz
 import requests
-from app.providers.google_health.parsing import parse_google_datapoint_timestamp, get_google_datapoint_date_string
+from app.providers.google_health.parsing import (
+    parse_google_datapoint_timestamp,
+    get_google_datapoint_date_string,
+)
 
 logger = logging.getLogger(__name__)
+
 
 class GoogleHealthClient:
     def __init__(self, settings, transport, timezone=pytz.utc):
         self.settings, self.transport, self.timezone = settings, transport, timezone
 
     def get_timezone_name(self):
-        data = self.transport.request(self.get_google_health_api_url("users/me/settings"))
+        data = self.transport.request(
+            self.get_google_health_api_url("users/me/settings")
+        )
         if isinstance(data, dict):
             for source in (data, data.get("settings") or {}):
                 for key in ("timezone", "timeZone", "time_zone"):
@@ -25,30 +32,52 @@ class GoogleHealthClient:
     def get_google_health_api_url(self, path):
         return f"{self.settings.google_health_base_url}/{self.settings.google_health_api_version}/{path.lstrip('/')}"
 
-    def request_google_data_points_list(self, data_type, params=None, suppress_http_error_log=False):
-        endpoint = self.get_google_health_api_url(f"users/me/dataTypes/{data_type}/dataPoints")
-        return self.transport.request(endpoint, params=params or {}, suppress_http_error_log=suppress_http_error_log)
+    def request_google_data_points_list(
+        self, data_type, params=None, suppress_http_error_log=False
+    ):
+        endpoint = self.get_google_health_api_url(
+            f"users/me/dataTypes/{data_type}/dataPoints"
+        )
+        return self.transport.request(
+            endpoint,
+            params=params or {},
+            suppress_http_error_log=suppress_http_error_log,
+        )
 
     def request_google_data_points_daily_rollup(self, data_type, payload):
-        endpoint = self.get_google_health_api_url(f"users/me/dataTypes/{data_type}/dataPoints:dailyRollUp")
+        endpoint = self.get_google_health_api_url(
+            f"users/me/dataTypes/{data_type}/dataPoints:dailyRollUp"
+        )
         headers = {"Accept": "application/json"}
         headers["Content-Type"] = "application/json"
-        return self.transport.request(endpoint, headers=headers, data=json.dumps(payload), request_type="post")
+        return self.transport.request(
+            endpoint, headers=headers, data=json.dumps(payload), request_type="post"
+        )
 
     def request_google_data_points_rollup(self, data_type, payload):
-        endpoint = self.get_google_health_api_url(f"users/me/dataTypes/{data_type}/dataPoints:rollUp")
+        endpoint = self.get_google_health_api_url(
+            f"users/me/dataTypes/{data_type}/dataPoints:rollUp"
+        )
         headers = {"Accept": "application/json"}
         headers["Content-Type"] = "application/json"
-        return self.transport.request(endpoint, headers=headers, data=json.dumps(payload), request_type="post")
+        return self.transport.request(
+            endpoint, headers=headers, data=json.dumps(payload), request_type="post"
+        )
 
     def get_google_datapoints_for_date(self, data_type, date_str, page_size=10000):
         start_dt_local = self.timezone.localize(datetime.strptime(date_str, "%Y-%m-%d"))
-        end_dt_local = self.timezone.localize(datetime.strptime(date_str, "%Y-%m-%d") + timedelta(days=1))
-        start_iso = start_dt_local.astimezone(pytz.utc).isoformat().replace("+00:00", "Z")
+        end_dt_local = self.timezone.localize(
+            datetime.strptime(date_str, "%Y-%m-%d") + timedelta(days=1)
+        )
+        start_iso = (
+            start_dt_local.astimezone(pytz.utc).isoformat().replace("+00:00", "Z")
+        )
         end_iso = end_dt_local.astimezone(pytz.utc).isoformat().replace("+00:00", "Z")
 
         filter_data_type = data_type.replace("-", "_")
-        next_date_str = (datetime.strptime(date_str, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+        next_date_str = (
+            datetime.strptime(date_str, "%Y-%m-%d") + timedelta(days=1)
+        ).strftime("%Y-%m-%d")
 
         # Data types do not expose a uniform set of filter members.
         if data_type in ["steps"]:
@@ -87,7 +116,11 @@ class GoogleHealthClient:
                 except requests.exceptions.HTTPError:
                     if first:
                         raise
-                    logger.warning("Pagination interrupted for %s; keeping %d points", data_type, len(all_points))
+                    logger.warning(
+                        "Pagination interrupted for %s; keeping %d points",
+                        data_type,
+                        len(all_points),
+                    )
                     break
                 first = False
                 if not isinstance(resp, dict):
@@ -106,7 +139,10 @@ class GoogleHealthClient:
                 used_server_filter = True
                 break
             except requests.exceptions.HTTPError as error:
-                if error.response is not None and error.response.status_code in (403, 404):
+                if error.response is not None and error.response.status_code in (
+                    403,
+                    404,
+                ):
                     raise
                 continue
 
@@ -130,23 +166,40 @@ class GoogleHealthClient:
                 filtered.append((data_point, ts))
                 continue
 
-            if datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone(self.timezone).strftime("%Y-%m-%d") == date_str:
+            if (
+                datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                .astimezone(self.timezone)
+                .strftime("%Y-%m-%d")
+                == date_str
+            ):
                 filtered.append((data_point, ts))
         return filtered
 
-    def get_google_datapoints_for_date_range(self, data_type, start_date_str, end_date_str, page_size=10000):
+    def get_google_datapoints_for_date_range(
+        self, data_type, start_date_str, end_date_str, page_size=10000
+    ):
         start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
         end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
         aggregated = []
         current = start_date
         while current <= end_date:
-            aggregated.extend(self.get_google_datapoints_for_date(data_type, current.strftime("%Y-%m-%d"), page_size=page_size))
+            aggregated.extend(
+                self.get_google_datapoints_for_date(
+                    data_type, current.strftime("%Y-%m-%d"), page_size=page_size
+                )
+            )
             current += timedelta(days=1)
         return aggregated
 
     def discover_google_device_metadata(self):
         """Return actual device metadata attached to a recent Google data point."""
-        for data_type in ("heart-rate", "steps", "daily-resting-heart-rate", "weight", "exercise"):
+        for data_type in (
+            "heart-rate",
+            "steps",
+            "daily-resting-heart-rate",
+            "weight",
+            "exercise",
+        ):
             try:
                 resp = self.request_google_data_points_list(
                     data_type, params={"pageSize": 1}, suppress_http_error_log=True
@@ -166,7 +219,9 @@ class GoogleHealthClient:
                         "connectionStatus": device.get("connectionStatus"),
                     }
                     try:
-                        metadata["_observationTime"] = parse_google_datapoint_timestamp(dp, data_type, self.timezone)
+                        metadata["_observationTime"] = parse_google_datapoint_timestamp(
+                            dp, data_type, self.timezone
+                        )
                     except (TypeError, ValueError):
                         metadata["_observationTime"] = None
                     return metadata

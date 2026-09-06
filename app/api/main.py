@@ -1,4 +1,5 @@
 """FastAPI composition root with injectable infrastructure for tests."""
+
 from contextlib import asynccontextmanager, ExitStack
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -17,7 +18,9 @@ def create_app(settings=None, influx=None, gemini=None, clock=None):
     async def lifespan(app):
         cfg = settings or Settings.from_env()
         if settings is None:
-            configure_logging(secrets=(cfg.api_token, cfg.gemini_key, cfg.influx_password))
+            configure_logging(
+                secrets=(cfg.api_token, cfg.gemini_key, cfg.influx_password)
+            )
         with ExitStack() as resources:
             db = influx if influx is not None else InfluxService(cfg)
             if influx is None:
@@ -36,8 +39,11 @@ def create_app(settings=None, influx=None, gemini=None, clock=None):
 
     @app.exception_handler(APIError)
     async def error_handler(request, exc):
-        return JSONResponse(status_code=exc.status, content={"error": exc.code, "message": exc.message},
-                            headers={"WWW-Authenticate": "Bearer"} if exc.status == 401 else None)
+        return JSONResponse(
+            status_code=exc.status,
+            content={"error": exc.code, "message": exc.message},
+            headers={"WWW-Authenticate": "Bearer"} if exc.status == 401 else None,
+        )
 
     app.include_router(system.router)
     app.include_router(ai.router)

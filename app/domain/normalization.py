@@ -4,10 +4,12 @@ import json
 from datetime import date, datetime, timezone
 from typing import Any
 import pytz
-from app.domain.measurements import COMMON_TAG_KEYS, SLEEP_STAGE_MAPPING
+from app.domain.measurements import SLEEP_STAGE_MAPPING
 
 
-def build_common_tags(user_id: str, provider: str, device_name: str, device_id: str) -> dict[str, str]:
+def build_common_tags(
+    user_id: str, provider: str, device_name: str, device_id: str
+) -> dict[str, str]:
     values = {
         "UserId": str(user_id).strip(),
         "Provider": str(provider).strip().lower(),
@@ -39,14 +41,22 @@ def utc_timestamp(value: str | datetime, local_timezone: str = "UTC") -> str:
 
 def local_date_boundary_utc(value: str | date, local_timezone: str) -> str:
     parsed_date = date.fromisoformat(value) if isinstance(value, str) else value
-    local_midnight = pytz.timezone(local_timezone).localize(datetime(parsed_date.year, parsed_date.month, parsed_date.day))
+    local_midnight = pytz.timezone(local_timezone).localize(
+        datetime(parsed_date.year, parsed_date.month, parsed_date.day)
+    )
     return local_midnight.astimezone(timezone.utc).isoformat()
 
 
-def point_identity(point: dict[str, Any]) -> tuple[str, tuple[tuple[str, str], ...], str]:
+def point_identity(
+    point: dict[str, Any],
+) -> tuple[str, tuple[tuple[str, str], ...], str]:
     return (
         str(point["measurement"]),
-        tuple(sorted((str(key), str(value)) for key, value in point.get("tags", {}).items())),
+        tuple(
+            sorted(
+                (str(key), str(value)) for key, value in point.get("tags", {}).items()
+            )
+        ),
         str(point["time"]),
     )
 
@@ -100,7 +110,9 @@ def normalize_duration_seconds(value: Any) -> int | None:
     return int(float(value))
 
 
-def sleep_efficiency(minutes_asleep: Any, minutes_in_bed: Any, provider_value: Any = None) -> int | None:
+def sleep_efficiency(
+    minutes_asleep: Any, minutes_in_bed: Any, provider_value: Any = None
+) -> int | None:
     if provider_value is not None:
         return int(round(float(provider_value)))
     if minutes_asleep is None or minutes_in_bed is None:
@@ -112,7 +124,9 @@ def sleep_efficiency(minutes_asleep: Any, minutes_in_bed: Any, provider_value: A
 
 
 def sleep_stage(value: Any) -> tuple[int, str]:
-    return SLEEP_STAGE_MAPPING.get(str(value or "UNKNOWN").strip().upper(), (4, "unknown"))
+    return SLEEP_STAGE_MAPPING.get(
+        str(value or "UNKNOWN").strip().upper(), (4, "unknown")
+    )
 
 
 def stable_resource_id(resource_name: Any) -> str | None:

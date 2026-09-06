@@ -1,4 +1,5 @@
 """Synchronous jobs avoid overlapping collector runs."""
+
 import logging
 import threading
 import requests
@@ -6,6 +7,7 @@ import schedule
 from app.core.exceptions import StorageError, ProviderError
 
 logger = logging.getLogger(__name__)
+
 
 class IngestionScheduler:
     def __init__(self, jobs, settings, scheduler=None, stop_event=None):
@@ -18,7 +20,10 @@ class IngestionScheduler:
         try:
             return callback(*args)
         except (StorageError, ProviderError, requests.RequestException):
-            logger.error("Ingestion job %s failed; it will be retried at its next scheduled run", callback.__name__)
+            logger.error(
+                "Ingestion job %s failed; it will be retried at its next scheduled run",
+                callback.__name__,
+            )
 
     def register(self):
         if self._registered:
@@ -31,9 +36,13 @@ class IngestionScheduler:
         self.scheduler.every(3).minutes.do(self._run_job, jobs.sync_intraday)
         self.scheduler.every(1).hours.do(self._run_job, jobs.sync_previous_day)
         self.scheduler.every(20).minutes.do(self._run_job, ingestion.sync_battery)
-        self.scheduler.every(20).minutes.do(self._run_job, ingestion.sync_device_metadata)
+        self.scheduler.every(20).minutes.do(
+            self._run_job, ingestion.sync_device_metadata
+        )
         for group, hours in (("30d", 3), ("100d", 4), ("365d", 6), ("none", 6)):
-            self.scheduler.every(hours).hours.do(self._run_job, jobs.sync_daily_metrics, group)
+            self.scheduler.every(hours).hours.do(
+                self._run_job, jobs.sync_daily_metrics, group
+            )
         self.scheduler.every(1).hours.do(self._run_job, jobs.sync_workouts)
 
     def run(self):

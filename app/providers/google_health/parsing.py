@@ -1,6 +1,8 @@
 """Pure Google payload and timestamp parsing."""
+
 from datetime import datetime
 import pytz
+
 
 def extract_first_numeric(value):
     if isinstance(value, (int, float)):
@@ -88,7 +90,9 @@ def get_google_datapoint_date_string(data_point, data_type):
     return None
 
 
-def parse_google_datapoint_timestamp(data_point, data_type=None, local_timezone=pytz.utc):
+def parse_google_datapoint_timestamp(
+    data_point, data_type=None, local_timezone=pytz.utc
+):
     payload = get_google_datapoint_payload(data_point, data_type) if data_type else {}
 
     time_candidates = [
@@ -98,36 +102,44 @@ def parse_google_datapoint_timestamp(data_point, data_type=None, local_timezone=
     ]
 
     if isinstance(payload, dict):
-        time_candidates.extend([
-            payload.get("sampleTime"),
-            payload.get("sample_time"),
-            payload.get("time"),
-        ])
+        time_candidates.extend(
+            [
+                payload.get("sampleTime"),
+                payload.get("sample_time"),
+                payload.get("time"),
+            ]
+        )
 
     sample_time = payload.get("sampleTime") if isinstance(payload, dict) else None
     if isinstance(sample_time, dict):
-        time_candidates.extend([
-            sample_time.get("physicalTime"),
-            sample_time.get("physical_time"),
-        ])
+        time_candidates.extend(
+            [
+                sample_time.get("physicalTime"),
+                sample_time.get("physical_time"),
+            ]
+        )
 
     interval = data_point.get("interval")
     if isinstance(interval, dict):
-        time_candidates.extend([
-            interval.get("startTime"),
-            interval.get("start_time"),
-            interval.get("civilStartTime"),
-            interval.get("civil_start_time"),
-        ])
+        time_candidates.extend(
+            [
+                interval.get("startTime"),
+                interval.get("start_time"),
+                interval.get("civilStartTime"),
+                interval.get("civil_start_time"),
+            ]
+        )
 
     payload_interval = payload.get("interval") if isinstance(payload, dict) else None
     if isinstance(payload_interval, dict):
-        time_candidates.extend([
-            payload_interval.get("startTime"),
-            payload_interval.get("start_time"),
-            payload_interval.get("endTime"),
-            payload_interval.get("end_time"),
-        ])
+        time_candidates.extend(
+            [
+                payload_interval.get("startTime"),
+                payload_interval.get("start_time"),
+                payload_interval.get("endTime"),
+                payload_interval.get("end_time"),
+            ]
+        )
 
     for candidate in time_candidates:
         if isinstance(candidate, str):
@@ -140,9 +152,13 @@ def parse_google_datapoint_timestamp(data_point, data_type=None, local_timezone=
             except ValueError:
                 continue
 
-    date_str = get_google_datapoint_date_string(data_point, data_type) if data_type else None
+    date_str = (
+        get_google_datapoint_date_string(data_point, data_type) if data_type else None
+    )
     if date_str:
-        dt = local_timezone.localize(datetime.strptime(date_str + "T00:00:00", "%Y-%m-%dT%H:%M:%S"))
+        dt = local_timezone.localize(
+            datetime.strptime(date_str + "T00:00:00", "%Y-%m-%dT%H:%M:%S")
+        )
         return dt.astimezone(pytz.utc).isoformat()
 
     return None
