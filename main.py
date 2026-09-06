@@ -1,3 +1,4 @@
+from app.core.config import WorkerSettings
 import base64, requests, schedule, time, json, pytz, logging, os, sys
 from dotenv import load_dotenv
 from requests.exceptions import ConnectionError
@@ -1841,102 +1842,50 @@ def fetch_latest_activities(end_date_str):
 def main():
     """Run the legacy worker explicitly; importing this module is safe."""
     global ACCESS_TOKEN, AUTO_DATE_RANGE, DEVICENAME, DEVICE_ID, DEVICE_METADATA_STATE_PATH, DRY_RUN_MODE, EXPIRED_TOKEN_MAX_RETRY, FITBIT_API_BASE_URL, FITBIT_LANGUAGE, FITBIT_LOG_FILE_PATH, GOOGLE_DEVICE_METADATA, GOOGLE_HEALTH_API_VERSION, GOOGLE_HEALTH_BASE_URL, GOOGLE_OAUTH_TOKEN_URL, HEALTH_API_PROVIDER, INFLUXDB_BUCKET, INFLUXDB_DATABASE, INFLUXDB_HOST, INFLUXDB_ORG, INFLUXDB_PASSWORD, INFLUXDB_PORT, INFLUXDB_TOKEN, INFLUXDB_URL, INFLUXDB_USERNAME, INFLUXDB_V3_ACCESS_TOKEN, INFLUXDB_VERSION, LOCAL_TIMEZONE, LOG_LEVEL, LOG_LEVEL_NAME, MANUAL_END_DATE, MANUAL_START_DATE, OVERWRITE_LOG_FILE, PENDING_DEVICE_METADATA_SIGNATURE, REQUEST_MAX_RETRIES, REQUEST_TIMEOUT_SECONDS, SCHEDULE_AUTO_UPDATE, SERVER_ERROR_MAX_RETRY, SKIP_REQUEST_ON_SERVER_ERROR, TOKEN_FILE_PATH, USER_ID, auto_update_date_range, client_id, client_secret, collected_records, date_list, date_range, date_str, demo_point, discovered_device_name, end_date, end_date_str, end_index, google_client_id, google_client_secret, i, influxdb_write_api, influxdbclient, single_day, start_date, start_date_str, start_index
-    load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
-
-    FITBIT_LOG_FILE_PATH = os.environ.get("FITBIT_LOG_FILE_PATH") or "your/expected/log/file/location/path"
-
-    TOKEN_FILE_PATH = os.environ.get("TOKEN_FILE_PATH") or "your/expected/token/file/location/path"
-
-    OVERWRITE_LOG_FILE = True
-
-    FITBIT_LANGUAGE = 'en_US'
-
-    HEALTH_API_PROVIDER = (os.environ.get("HEALTH_API_PROVIDER") or "fitbit").strip().lower()
-
-    assert HEALTH_API_PROVIDER in ["fitbit", "google"], "HEALTH_API_PROVIDER must be either 'fitbit' or 'google'"
-
-    FITBIT_API_BASE_URL = "https://api.fitbit.com"
-
-    GOOGLE_HEALTH_BASE_URL = os.environ.get("GOOGLE_HEALTH_BASE_URL") or "https://health.googleapis.com"
-
-    GOOGLE_HEALTH_API_VERSION = os.environ.get("GOOGLE_HEALTH_API_VERSION") or "v4"
-
-    GOOGLE_OAUTH_TOKEN_URL = os.environ.get("GOOGLE_OAUTH_TOKEN_URL") or "https://oauth2.googleapis.com/token"
-
-    INFLUXDB_VERSION = os.environ.get("INFLUXDB_VERSION") or "1"
-
-    assert INFLUXDB_VERSION in ['1','2','3'], "Only InfluxDB version 1 or 2 or 3 is allowed - please put either 1 or 2 or 3"
-
-    INFLUXDB_HOST = os.environ.get("INFLUXDB_HOST") or 'localhost'
-
-    INFLUXDB_PORT = os.environ.get("INFLUXDB_PORT") or 8086
-
-    INFLUXDB_USERNAME = os.environ.get("INFLUXDB_USERNAME") or 'your_influxdb_username'
-
-    INFLUXDB_PASSWORD = os.environ.get("INFLUXDB_PASSWORD") or 'your_influxdb_password'
-
-    INFLUXDB_DATABASE = os.environ.get("INFLUXDB_DATABASE") or 'your_influxdb_database_name'
-
-    INFLUXDB_BUCKET = os.environ.get("INFLUXDB_BUCKET") or "your_bucket_name_here"
-
-    INFLUXDB_ORG = os.environ.get("INFLUXDB_ORG") or "your_org_here"
-
-    INFLUXDB_TOKEN = os.environ.get("INFLUXDB_TOKEN") or "your_token_here"
-
-    INFLUXDB_URL = os.environ.get("INFLUXDB_URL") or "http://your_url_here:8086"
-
-    INFLUXDB_V3_ACCESS_TOKEN = os.getenv("INFLUXDB_V3_ACCESS_TOKEN",'')
-
-    client_id = os.environ.get("CLIENT_ID") or "your_application_client_ID"
-
-    client_secret = os.environ.get("CLIENT_SECRET") or "your_application_client_secret"
-
-    google_client_id = os.environ.get("GOOGLE_CLIENT_ID") or client_id
-
-    google_client_secret = os.environ.get("GOOGLE_CLIENT_SECRET") or client_secret
-
-    DEVICENAME = os.environ.get("DEVICENAME") or "Your_Device_Name"
-
-    USER_ID = os.environ.get("USER_ID") or "user_001"
-
-    DEVICE_ID = os.environ.get("DEVICE_ID") or "fitbit_air_001"
-
-    DEVICE_METADATA_STATE_PATH = os.environ.get("DEVICE_METADATA_STATE_PATH") or os.path.join(os.path.dirname(TOKEN_FILE_PATH), "device_metadata_state.json")
-
+    settings = WorkerSettings.from_env()
+    FITBIT_LOG_FILE_PATH = settings.fitbit_log_file_path
+    TOKEN_FILE_PATH = settings.token_file_path
+    OVERWRITE_LOG_FILE = settings.overwrite_log_file
+    FITBIT_LANGUAGE = settings.fitbit_language
+    HEALTH_API_PROVIDER = settings.health_api_provider
+    FITBIT_API_BASE_URL = settings.fitbit_api_base_url
+    GOOGLE_HEALTH_BASE_URL = settings.google_health_base_url
+    GOOGLE_HEALTH_API_VERSION = settings.google_health_api_version
+    GOOGLE_OAUTH_TOKEN_URL = settings.google_oauth_token_url
+    INFLUXDB_VERSION = settings.influxdb_version
+    INFLUXDB_HOST = settings.influxdb_host
+    INFLUXDB_PORT = settings.influxdb_port
+    INFLUXDB_USERNAME = settings.influxdb_username
+    INFLUXDB_PASSWORD = settings.influxdb_password
+    INFLUXDB_DATABASE = settings.influxdb_database
+    INFLUXDB_BUCKET = settings.influxdb_bucket
+    INFLUXDB_ORG = settings.influxdb_org
+    INFLUXDB_TOKEN = settings.influxdb_token
+    INFLUXDB_URL = settings.influxdb_url
+    INFLUXDB_V3_ACCESS_TOKEN = settings.influxdb_v3_access_token
+    client_id = settings.client_id
+    client_secret = settings.client_secret
+    google_client_id = settings.google_client_id
+    google_client_secret = settings.google_client_secret
+    DEVICENAME = settings.devicename
+    USER_ID = settings.user_id
+    DEVICE_ID = settings.device_id
+    DEVICE_METADATA_STATE_PATH = settings.device_metadata_state_path
+    MANUAL_START_DATE = settings.manual_start_date
+    MANUAL_END_DATE = settings.manual_end_date
+    AUTO_DATE_RANGE = settings.auto_date_range
+    auto_update_date_range = settings.auto_update_date_range
+    LOCAL_TIMEZONE = settings.local_timezone
+    SCHEDULE_AUTO_UPDATE = settings.schedule_auto_update
+    SERVER_ERROR_MAX_RETRY = settings.server_error_max_retry
+    EXPIRED_TOKEN_MAX_RETRY = settings.expired_token_max_retry
+    SKIP_REQUEST_ON_SERVER_ERROR = settings.skip_request_on_server_error
+    REQUEST_MAX_RETRIES = settings.request_max_retries
+    REQUEST_TIMEOUT_SECONDS = settings.request_timeout_seconds
+    DRY_RUN_MODE = settings.dry_run_mode
+    LOG_LEVEL_NAME = settings.log_level_name
+    LOG_LEVEL = settings.log_level
     ACCESS_TOKEN = ""
-
-    MANUAL_START_DATE = os.getenv("MANUAL_START_DATE", None)
-
-    MANUAL_END_DATE = os.getenv("MANUAL_END_DATE", datetime.today().strftime('%Y-%m-%d'))
-
-    AUTO_DATE_RANGE = False if os.environ.get("AUTO_DATE_RANGE") in ['False','false','FALSE','f','F','no','No','NO','0'] else (not bool(MANUAL_START_DATE))
-
-    auto_update_date_range = 1
-
-    LOCAL_TIMEZONE = os.environ.get("LOCAL_TIMEZONE") or "Automatic"
-
-    SCHEDULE_AUTO_UPDATE = True if AUTO_DATE_RANGE else False
-
-    SERVER_ERROR_MAX_RETRY = 3
-
-    EXPIRED_TOKEN_MAX_RETRY = 5
-
-    SKIP_REQUEST_ON_SERVER_ERROR = True
-
-    REQUEST_MAX_RETRIES = int(os.environ.get("REQUEST_MAX_RETRIES") or "5")
-
-    REQUEST_TIMEOUT_SECONDS = int(os.environ.get("REQUEST_TIMEOUT_SECONDS") or "30")
-
-    DRY_RUN_MODE = str(os.environ.get("DRY_RUN_MODE", "False")).lower() in ["true", "1", "yes", "y"]
-
-    LOG_LEVEL_NAME = (os.environ.get("LOG_LEVEL") or "DEBUG").strip().upper()
-
-    LOG_LEVEL = getattr(logging, LOG_LEVEL_NAME, None)
-
-    if not isinstance(LOG_LEVEL, int):
-        print(f"Invalid LOG_LEVEL '{LOG_LEVEL_NAME}'. Falling back to DEBUG.")
-        LOG_LEVEL = logging.DEBUG
-        LOG_LEVEL_NAME = "DEBUG"
 
     if OVERWRITE_LOG_FILE:
         with open(FITBIT_LOG_FILE_PATH, "w"): pass
