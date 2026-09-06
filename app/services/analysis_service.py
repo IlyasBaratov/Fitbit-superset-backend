@@ -58,8 +58,8 @@ class AnalysisService:
                 return self.cache[key][1].model_copy(deep=True)
             try:
                 response = self.gemini.generate(context, question)
-            except GeminiUnavailable:
-                raise APIError("AI_SERVICE_UNAVAILABLE", "AI analysis is temporarily unavailable.") from None
+            except GeminiUnavailable as err:
+                raise APIError(getattr(err, "code", "AI_SERVICE_UNAVAILABLE"), str(err), getattr(err, "status", 503)) from None
             except InvalidAIOutput:
                 raise APIError("INVALID_AI_OUTPUT", "AI analysis could not be validated.", 502) from None
             self.cache[key] = (time.monotonic()+self.settings.cache_seconds, response.model_copy(deep=True))
@@ -74,7 +74,7 @@ class AnalysisService:
             raise APIError("AI_BUSY", "An analysis is already running; retry shortly.", 429)
         try:
             return self.gemini.check()
-        except GeminiUnavailable:
-            raise APIError("AI_SERVICE_UNAVAILABLE", "Gemini connection check failed.") from None
+        except GeminiUnavailable as err:
+            raise APIError(getattr(err, "code", "AI_SERVICE_UNAVAILABLE"), str(err), getattr(err, "status", 503)) from None
         finally:
             self.lock.release()

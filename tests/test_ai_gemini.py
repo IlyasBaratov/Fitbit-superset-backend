@@ -5,6 +5,14 @@ from app.config import Settings
 from app.services.gemini_service import GeminiService, GeminiUnavailable
 from app.services.ai_response_validator import validate_response, InvalidAIOutput
 
+class UpstreamError(Exception):
+    def __init__(self, message, status_code=None, code=None, headers=None):
+        super().__init__(message)
+        self.status_code = status_code
+        self.code = code
+        self.response = Mock(status_code=status_code, headers=headers or {})
+
+
 @pytest.fixture
 def context():
     return {"evidence_keys": ["steps"], "activity": {"steps": {}}, "data_quality": {"missing": ["HRV"]}}
@@ -47,12 +55,13 @@ def test_second_invalid_output_fails(context):
     with pytest.raises(InvalidAIOutput): service.generate(context, "question")
     assert client.models.generate_content.call_count == 2
 
-def test_upstream_failure_redacted_and_not_retried(context):
+def test_non_retryable_upstream_failure_not_retried(context):
     client = Mock()
-    client.models.generate_content.side_effect = TimeoutError("secret URL")
+    client.models.generate_content.side_effect = UpstreamError("bad api key secret", status_code=401, code="UNAUTHENTICATED")
     service = GeminiService(Settings(api_token="x"*40, gemini_key="k", model="m"), client)
-    with pytest.raises(GeminiUnavailable, match="temporarily unavailable"):
+    with pytest.raises(GeminiUnavailable, match="configuration is invalid") as err:
         service.generate(context, "question")
+    assert err.value.code == "AI_PROVIDER_CONFIGURATION_ERROR"
     assert client.models.generate_content.call_count == 1
 
 
@@ -67,3 +76,50 @@ def test_no_sleep_claim_without_sleep_evidence(context, output):
     output["summary"] = "Your sleep quality is excellent."
     with pytest.raises(InvalidAIOutput):
         validate_response(json.dumps(output), context)
+
+
+def test_transient_timeout_is_retried_once_when_next_attempt_succeeds(context, output):
+    client = Mock()
+    client.models.generate_content.side_effect = [TimeoutError("timed out"), Mock(text=json.dumps(output))]
+    service = GeminiService(Settings(api_token="x"*40, gemini_key="k", model="m", gemini_retry_base_ms=0, gemini_retry_jitter_ms=0), client)
+    assert service.generate(context, "question").summary
+    assert client.models.generate_content.call_count == 2
+
+
+def test_retry_after_header_is_used_for_backoff(context, monkeypatch):
+    client = Mock()
+    error = UpstreamError("rate limited", status_code=429, headers={"Retry-After": "0"})
+    client.models.generate_content.side_effect = [error, GeminiUnavailable("done")]
+    service = GeminiService(Settings(api_token="x"*40, gemini_key="k", model="m", gemini_retry_attempts=2), client)
+    slept = []
+    monkeypatch.setattr("app.services.gemini_service.time.sleep", lambda s: slept.append(s))
+    with pytest.raises(GeminiUnavailable):
+        service.generate(context, "question")
+    assert slept == [0.0]
+
+
+def test_retry_exhaustion_for_transient_error(context):
+    client = Mock()
+    client.models.generate_content.side_effect = TimeoutError("timed out")
+    service = GeminiService(Settings(api_token="x"*40, gemini_key="k", model="m", gemini_retry_attempts=2, gemini_retry_base_ms=0, gemini_retry_jitter_ms=0), client)
+    with pytest.raises(GeminiUnavailable, match="did not respond in time") as err:
+        service.generate(context, "question")
+    assert err.value.code == "AI_PROVIDER_TIMEOUT"
+    assert client.models.generate_content.call_count == 2
+
+
+def test_fallback_model_is_used_after_transient_primary_failure(context, output):
+    client = Mock()
+    calls = []
+
+    def side_effect(**kwargs):
+        calls.append(kwargs["model"])
+        if kwargs["model"] == "primary":
+            raise TimeoutError("timed out")
+        return Mock(text=json.dumps(output))
+
+    client.models.generate_content.side_effect = side_effect
+    service = GeminiService(Settings(api_token="x"*40, gemini_key="k", model="primary", fallback_model="fallback",
+        gemini_retry_attempts=1, gemini_retry_base_ms=0, gemini_retry_jitter_ms=0), client)
+    assert service.generate(context, "question").summary
+    assert calls == ["primary", "fallback"]

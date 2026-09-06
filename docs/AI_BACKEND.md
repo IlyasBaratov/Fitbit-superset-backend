@@ -12,6 +12,10 @@ MODEL_NAME=your-selected-model
 AI_API_TOKEN=your-separate-random-token-at-least-32-characters
 AI_DEFAULT_ANALYSIS_DAYS=7
 AI_MAX_ANALYSIS_DAYS=90
+GEMINI_RETRY_ATTEMPTS=3
+GEMINI_RETRY_MAX_ELAPSED_MS=55000
+# Optional fallback:
+GEMINI_FALLBACK_MODEL=
 ```
 
 `MODEL_NAME` takes precedence over `GEMINI_MODEL`. Model availability, quota, and structured-output support must match your Gemini account. The API uses Google's `google-genai` SDK and Generate Content structured JSON output, validated with Pydantic. See [Google's documentation](https://ai.google.dev/gemini-api/docs/generate-content/structured-output).
@@ -95,7 +99,10 @@ Responses contain `summary`, `score`, `insights`, `suggestions`, `warnings`, and
 | 422 | FastAPI `detail` validation errors | Invalid request fields or blank question |
 | 429 | `AI_BUSY` | Another analysis/check is running; retry shortly |
 | 503 | `DATA_SERVICE_UNAVAILABLE` | Database unavailable or query exceeds safe bounds |
-| 503 | `AI_SERVICE_UNAVAILABLE` | Gemini unavailable, timeout, rejected model/key, or quota failure |
+| 503 | `AI_PROVIDER_TIMEOUT` | Gemini timed out before completing analysis |
+| 503 | `AI_PROVIDER_OVERLOADED` | Gemini rate-limited or temporarily overloaded |
+| 500 | `AI_PROVIDER_CONFIGURATION_ERROR` | Gemini credentials/model configuration is invalid |
+| 503 | `AI_SERVICE_UNAVAILABLE` | Other Gemini availability failures |
 | 502 | `INVALID_AI_OUTPUT` | Model output still invalid after one corrective retry |
 
 Controlled service errors use `{"error":"CODE","message":"Explanation"}`. Failed responses are not cached.
@@ -108,7 +115,7 @@ Controlled service errors use `{"error":"CODE","message":"Explanation"}`. Failed
 - Workouts are deduplicated by activity ID. Durations remain seconds, distances kilometers, and weight kilograms. Heart-rate trends provide relative intensity context; no universal intensity thresholds are imposed. Missing workout days are described as days without records, not confirmed rest days. The collector fetches only the most recent 50 exercises, so historical workout coverage can be incomplete.
 - Older classic Fitbit sleep labels may map restless sleep to REM in stored data. The API reports this limitation and does not rewrite those records. Sleep/other unavailable provider measurements remain gaps.
 - Optional GPS and device metadata are not queried. The model receives no account/device/session IDs or raw high-frequency records. Questions and activity labels are treated as untrusted text. Avoid including identifying details in questions: the question itself is sent to Gemini.
-- Queries use at most 190 days and 20,000 returned rows per measurement, failing rather than silently truncating. Intraday series are aggregated hourly in InfluxDB first. Each database request has a 10-second timeout; each Gemini call has a 45-second timeout and no transport retries. Invalid model output is retried once. Daily details sent to Gemini are capped at the latest 14 observed days per metric while period statistics retain the full requested range. Prepared model payloads are limited to 120 KB and outputs to 50,000 characters.
+- Queries use at most 190 days and 20,000 returned rows per measurement, failing rather than silently truncating. Intraday series are aggregated hourly in InfluxDB first. Each database request has a 10-second timeout. Gemini calls use bounded transient retries (timeouts, 429, and 5xx) with exponential backoff + jitter, optional `Retry-After` support, and a max elapsed budget; invalid model output is still retried once with stricter instructions. An optional fallback Gemini model can be configured for transient primary-model failures. Daily details sent to Gemini are capped at the latest 14 observed days per metric while period statistics retain the full requested range. Prepared model payloads are limited to 120 KB and outputs to 50,000 characters.
 - A single in-flight analysis/check per process bounds provider load. Successful analyses are cached in memory for five minutes, up to 128 entries. Cache identity includes user, provider/device, model, question/focus/period and prepared context. The database is queried before checking the model-response cache so new data invalidates it. Restarting clears cached health summaries.
 - Validation checks JSON/schema, evidence references, score support/ranges, common unavailable-metric claims, and common diagnostic/treatment wording. These are conservative guardrails, not a guarantee that all generated statements are correct. This is wellness analytics, not diagnosis.
 

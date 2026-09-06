@@ -98,3 +98,12 @@ def test_user_isolation_and_busy_limit(setup):
     finally:
         app.state.analysis.lock.release()
     db.fetch.assert_not_called()
+
+
+def test_provider_timeout_error_is_exposed(setup):
+    client, db, ai, app = setup
+    ai.generate.side_effect = GeminiUnavailable("Gemini did not respond in time. Please retry shortly.",
+        code="AI_PROVIDER_TIMEOUT", status=503, transient=True)
+    response = client.post("/api/ai/analyze", json={})
+    assert response.status_code == 503
+    assert response.json()["error"] == "AI_PROVIDER_TIMEOUT"
