@@ -1,19 +1,12 @@
-
-# %%
 import base64, requests, schedule, time, json, pytz, logging, os, sys
 from dotenv import load_dotenv
 from requests.exceptions import ConnectionError
 from datetime import datetime, timedelta, timezone
-# for influxdb 1.x
 from influxdb import InfluxDBClient
 from influxdb.exceptions import InfluxDBClientError
-# for influxdb 2.x
 from influxdb_client import InfluxDBClient as InfluxDBClient2
-# from influxdb_client.client.exceptions import InfluxDBError # possible duplicate
 from influxdb_client.client.write_api import SYNCHRONOUS
-# for influxdb 3.x
 from influxdb_client_3 import InfluxDBClient3, InfluxDBError
-# For XML processing
 import xml.etree.ElementTree as ET
 from health_schema import (
     FIELD_TYPES,
@@ -30,86 +23,7 @@ from health_schema import (
     stable_resource_id,
 )
 
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-# %% [markdown]
-# ## Variables
-
-# %%
-FITBIT_LOG_FILE_PATH = os.environ.get("FITBIT_LOG_FILE_PATH") or "your/expected/log/file/location/path"
-TOKEN_FILE_PATH = os.environ.get("TOKEN_FILE_PATH") or "your/expected/token/file/location/path"
-OVERWRITE_LOG_FILE = True
-FITBIT_LANGUAGE = 'en_US'
-HEALTH_API_PROVIDER = (os.environ.get("HEALTH_API_PROVIDER") or "fitbit").strip().lower()
-assert HEALTH_API_PROVIDER in ["fitbit", "google"], "HEALTH_API_PROVIDER must be either 'fitbit' or 'google'"
-FITBIT_API_BASE_URL = "https://api.fitbit.com"
-GOOGLE_HEALTH_BASE_URL = os.environ.get("GOOGLE_HEALTH_BASE_URL") or "https://health.googleapis.com"
-GOOGLE_HEALTH_API_VERSION = os.environ.get("GOOGLE_HEALTH_API_VERSION") or "v4"
-GOOGLE_OAUTH_TOKEN_URL = os.environ.get("GOOGLE_OAUTH_TOKEN_URL") or "https://oauth2.googleapis.com/token"
-INFLUXDB_VERSION = os.environ.get("INFLUXDB_VERSION") or "1" # Version of influxdb in use, supported values are 1 or 2
-assert INFLUXDB_VERSION in ['1','2','3'], "Only InfluxDB version 1 or 2 or 3 is allowed - please put either 1 or 2 or 3"
-# Update these variables for influxdb 1.x versions
-INFLUXDB_HOST = os.environ.get("INFLUXDB_HOST") or 'localhost' # for influxdb 1.x
-INFLUXDB_PORT = os.environ.get("INFLUXDB_PORT") or 8086 # for influxdb 1.x 
-INFLUXDB_USERNAME = os.environ.get("INFLUXDB_USERNAME") or 'your_influxdb_username' # for influxdb 1.x
-INFLUXDB_PASSWORD = os.environ.get("INFLUXDB_PASSWORD") or 'your_influxdb_password' # for influxdb 1.x
-INFLUXDB_DATABASE = os.environ.get("INFLUXDB_DATABASE") or 'your_influxdb_database_name' # for influxdb 1.x
-# Update these variables for influxdb 2.x versions
-INFLUXDB_BUCKET = os.environ.get("INFLUXDB_BUCKET") or "your_bucket_name_here" # for influxdb 2.x
-INFLUXDB_ORG = os.environ.get("INFLUXDB_ORG") or "your_org_here" # for influxdb 2.x
-INFLUXDB_TOKEN = os.environ.get("INFLUXDB_TOKEN") or "your_token_here" # for influxdb 2.x
-INFLUXDB_URL = os.environ.get("INFLUXDB_URL") or "http://your_url_here:8086" # for influxdb 2.x
-INFLUXDB_V3_ACCESS_TOKEN = os.getenv("INFLUXDB_V3_ACCESS_TOKEN",'') # InfluxDB V3 Access token, required only for InfluxDB 3.x
-# MAKE SURE you set the application type to PERSONAL. Otherwise, you won't have access to intraday data series, resulting in 40X errors.
-client_id = os.environ.get("CLIENT_ID") or "your_application_client_ID" # Change this to your client ID
-client_secret = os.environ.get("CLIENT_SECRET") or "your_application_client_secret" # Change this to your client Secret
-google_client_id = os.environ.get("GOOGLE_CLIENT_ID") or client_id
-google_client_secret = os.environ.get("GOOGLE_CLIENT_SECRET") or client_secret
-DEVICENAME = os.environ.get("DEVICENAME") or "Your_Device_Name" # e.g. "Charge5"
-USER_ID = os.environ.get("USER_ID") or "user_001"
-DEVICE_ID = os.environ.get("DEVICE_ID") or "fitbit_air_001"
-DEVICE_METADATA_STATE_PATH = os.environ.get("DEVICE_METADATA_STATE_PATH") or os.path.join(os.path.dirname(TOKEN_FILE_PATH), "device_metadata_state.json")
-ACCESS_TOKEN = "" # Empty Global variable initialization, will be replaced with a functional access code later using the refresh code
-MANUAL_START_DATE = os.getenv("MANUAL_START_DATE", None) # optional, in YYYY-MM-DD format, if you want to bulk update only from specific date
-MANUAL_END_DATE = os.getenv("MANUAL_END_DATE", datetime.today().strftime('%Y-%m-%d')) # optional, in YYYY-MM-DD format, if you want to bulk update until a specific date
-AUTO_DATE_RANGE = False if os.environ.get("AUTO_DATE_RANGE") in ['False','false','FALSE','f','F','no','No','NO','0'] else (not bool(MANUAL_START_DATE)) # Automatically selects date range from todays date and update_date_range variable
-auto_update_date_range = 1 # Days to go back from today for AUTO_DATE_RANGE *** DO NOT go above 2 - otherwise may break rate limit ***
-LOCAL_TIMEZONE = os.environ.get("LOCAL_TIMEZONE") or "Automatic" # set to "Automatic" for Automatic setup from User profile (if not mentioned here specifically).
-SCHEDULE_AUTO_UPDATE = True if AUTO_DATE_RANGE else False # Scheduling updates of data when script runs
-SERVER_ERROR_MAX_RETRY = 3
-EXPIRED_TOKEN_MAX_RETRY = 5
-SKIP_REQUEST_ON_SERVER_ERROR = True
-REQUEST_MAX_RETRIES = int(os.environ.get("REQUEST_MAX_RETRIES") or "5")
-REQUEST_TIMEOUT_SECONDS = int(os.environ.get("REQUEST_TIMEOUT_SECONDS") or "30")
-DRY_RUN_MODE = str(os.environ.get("DRY_RUN_MODE", "False")).lower() in ["true", "1", "yes", "y"]
-LOG_LEVEL_NAME = (os.environ.get("LOG_LEVEL") or "DEBUG").strip().upper()
-LOG_LEVEL = getattr(logging, LOG_LEVEL_NAME, None)
-if not isinstance(LOG_LEVEL, int):
-    print(f"Invalid LOG_LEVEL '{LOG_LEVEL_NAME}'. Falling back to DEBUG.")
-    LOG_LEVEL = logging.DEBUG
-    LOG_LEVEL_NAME = "DEBUG"
-
-# %% [markdown]
-# ## Logging setup
-
-# %%
-if OVERWRITE_LOG_FILE:
-    with open(FITBIT_LOG_FILE_PATH, "w"): pass
-
-logging.basicConfig(
-    level=LOG_LEVEL,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler(FITBIT_LOG_FILE_PATH, mode='a'),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-logging.info("Logging level set to %s", LOG_LEVEL_NAME)
-
-# %% [markdown]
-# ## Setting up base API Caller function
-
-# %%
 def get_default_auth_headers():
     if HEALTH_API_PROVIDER == "fitbit":
         return {
@@ -426,7 +340,6 @@ def get_google_datapoints_for_date_range(data_type, start_date_str, end_date_str
     return aggregated
 
 
-# Generic Request caller for all 
 def request_data_from_fitbit(url, headers=None, params=None, data=None, request_type="get", suppress_http_error_log=False):
     global ACCESS_TOKEN
     headers = headers or {}
@@ -496,10 +409,7 @@ def request_data_from_fitbit(url, headers=None, params=None, data=None, request_
 
     raise RuntimeError("Provider request retry loop exhausted")
 
-# %% [markdown]
-# ## Token Refresh Management
 
-# %%
 def save_tokens_to_file(access_token, refresh_token, provider, expires_in=None):
     tokens = {
         "provider": provider,
@@ -557,6 +467,7 @@ def refresh_google_tokens(client_id, client_secret, refresh_token):
     logging.info("Google token refresh successful!")
     return access_token, new_refresh_token
 
+
 def load_tokens_from_file():
     with open(TOKEN_FILE_PATH, "r") as file:
         tokens = json.load(file)
@@ -568,6 +479,7 @@ def get_active_credentials(client_id, client_secret):
     if HEALTH_API_PROVIDER == "google":
         return google_client_id, google_client_secret
     return client_id, client_secret
+
 
 def Get_New_Access_Token(client_id, client_secret):
     active_client_id, active_client_secret = get_active_credentials(client_id, client_secret)
@@ -586,52 +498,6 @@ def Get_New_Access_Token(client_id, client_secret):
         raise ValueError(f"Unsupported provider: {HEALTH_API_PROVIDER}")
 
     return access_token
-
-ACCESS_TOKEN = Get_New_Access_Token(client_id, client_secret)
-
-# %% [markdown]
-# ## Influxdb Database Initialization
-
-# %%
-if DRY_RUN_MODE:
-    influxdbclient = None
-    influxdb_write_api = None
-    logging.warning("DRY_RUN_MODE is enabled. InfluxDB initialization and writes are skipped.")
-elif INFLUXDB_VERSION == "2":
-    try:
-        influxdbclient = InfluxDBClient2(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
-        influxdb_write_api = influxdbclient.write_api(write_options=SYNCHRONOUS)
-    except InfluxDBError as err:
-        logging.error("Unable to connect with influxdb 2.x database! Aborted")
-        raise InfluxDBError("InfluxDB connection failed:" + str(err))
-elif INFLUXDB_VERSION == "1":
-    try:
-        influxdbclient = InfluxDBClient(host=INFLUXDB_HOST, port=INFLUXDB_PORT, username=INFLUXDB_USERNAME, password=INFLUXDB_PASSWORD)
-        influxdbclient.switch_database(INFLUXDB_DATABASE)
-    except InfluxDBClientError as err:
-        logging.error("Unable to connect with influxdb 1.x database! Aborted")
-        raise InfluxDBClientError("InfluxDB connection failed:" + str(err))
-elif INFLUXDB_VERSION == "3":
-    try:
-        influxdbclient = InfluxDBClient3(
-                host=f"http://{INFLUXDB_HOST}:{INFLUXDB_PORT}",
-                token=INFLUXDB_V3_ACCESS_TOKEN,
-                database=INFLUXDB_DATABASE
-                )
-        demo_point = {
-        'measurement': 'DemoPoint',
-        'time': '1970-01-01T00:00:00+00:00',
-        'tags': {'DemoTag': 'DemoTagValue'},
-        'fields': {'DemoField': 0}
-        }
-        # The following code block tests the connection by writing/overwriting a demo point. raises error and aborts if connection fails. 
-        influxdbclient.write(record=[demo_point])
-    except InfluxDBError as err:
-        logging.error("Unable to connect with influxdb 3.x database! Aborted")
-        raise InfluxDBClientError("InfluxDB connection failed:" + str(err))
-else:
-    logging.error("No matching version found. Supported values are 1 and 2 and 3")
-    raise InfluxDBClientError("No matching version found. Supported values are 1 and 2 and 3")
 
 
 def detect_influx_field_type_compatibility():
@@ -658,11 +524,6 @@ def detect_influx_field_type_compatibility():
             FIELD_TYPES[measurement]["value"] = int
         else:
             logging.error("Unsupported existing field type for %s.value: %s", measurement, existing_type)
-
-
-detect_influx_field_type_compatibility()
-
-PENDING_DEVICE_METADATA_SIGNATURE = None
 
 
 def get_common_tags():
@@ -721,10 +582,7 @@ def write_points_to_influxdb(points):
         logging.error("No matching version found. Supported values are 1 and 2 and 3")
         raise InfluxDBClientError("No matching version found. Supported values are 1 and 2 and 3")
 
-# %% [markdown]
-# ## Set Timezone from profile data
 
-# %%
 def get_user_timezone_name():
     if HEALTH_API_PROVIDER == "fitbit":
         profile_data = request_data_from_fitbit(f"{FITBIT_API_BASE_URL}/1/user/-/profile.json")
@@ -776,46 +634,6 @@ def discover_google_device_metadata():
 
 def discover_google_device_name():
     return discover_google_device_metadata().get("deviceName")
-
-
-if LOCAL_TIMEZONE == "Automatic":
-    LOCAL_TIMEZONE = pytz.timezone(get_user_timezone_name())
-else:
-    LOCAL_TIMEZONE = pytz.timezone(LOCAL_TIMEZONE)
-
-# Auto-detect the device name from the Google Health API if the user did not set
-# DEVICENAME explicitly. Falls back silently to the placeholder if discovery fails.
-GOOGLE_DEVICE_METADATA = {}
-if HEALTH_API_PROVIDER == "google":
-    GOOGLE_DEVICE_METADATA = discover_google_device_metadata()
-if HEALTH_API_PROVIDER == "google" and DEVICENAME == "Your_Device_Name":
-    discovered_device_name = GOOGLE_DEVICE_METADATA.get("deviceName")
-    if discovered_device_name:
-        logging.info("Auto-detected Google device displayName: %s (override with DEVICENAME env var)", discovered_device_name)
-        DEVICENAME = discovered_device_name
-    else:
-        logging.info("Could not auto-detect device displayName from Google Health API; keeping default '%s'", DEVICENAME)
-
-# %% [markdown]
-# ## Selecting Dates for update
-
-# %%
-if AUTO_DATE_RANGE:
-    end_date = datetime.now(LOCAL_TIMEZONE)
-    start_date = end_date - timedelta(days=auto_update_date_range)
-    end_date_str = end_date.strftime("%Y-%m-%d")
-    start_date_str = start_date.strftime("%Y-%m-%d")
-else:
-    start_date_str = MANUAL_START_DATE or input("Enter start date in YYYY-MM-DD format : ")
-    end_date_str = MANUAL_END_DATE or input("Enter end date in YYYY-MM-DD format : ")
-    start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
-    end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
-
-# %% [markdown]
-# ## Setting up functions for Requesting data from server
-
-# %%
-collected_records = []
 
 
 def load_device_metadata_signature():
@@ -881,6 +699,7 @@ def get_device_metadata():
     PENDING_DEVICE_METADATA_SIGNATURE = signature
     logging.info("Queued changed Device Metadata for provider '%s'", HEALTH_API_PROVIDER)
 
+
 def update_working_dates():
     global end_date, start_date, end_date_str, start_date_str
     end_date = datetime.now(LOCAL_TIMEZONE)
@@ -888,7 +707,7 @@ def update_working_dates():
     end_date_str = end_date.strftime("%Y-%m-%d")
     start_date_str = start_date.strftime("%Y-%m-%d")
 
-# Get last synced battery level of the device
+
 def get_battery_level():
     if HEALTH_API_PROVIDER == "google":
         logging.warning("Battery level endpoint is not mapped for Google Health API yet. Skipping DeviceBatteryLevel update.")
@@ -907,7 +726,7 @@ def get_battery_level():
     else:
         logging.error("Recording battery level failed : " + DEVICENAME)
 
-# For intraday detailed data, max possible range in one day. 
+
 def get_intraday_data_limit_1d(date_str, measurement_list):
     if HEALTH_API_PROVIDER == "google":
         data_type_mapping = {
@@ -971,22 +790,8 @@ def get_intraday_data_limit_1d(date_str, measurement_list):
             logging.info("Recorded " +  measurement[1] + " intraday for date " + date_str)
         else:
             logging.error("Recording failed : " +  measurement[1] + " intraday for date " + date_str)
-# =============================================================================
-# PATCH: Google Health API mappings for previously-skipped data types
-#
-# Drop-in replacements for three functions in Fitbit_Fetch.py:
-#   - get_daily_data_limit_30d   → HRV, Breathing Rate, Skin Temp, SPO2 intraday, Weight/BMI
-#   - get_daily_data_limit_100d  → Sleep Summary + Sleep Levels
-#   - get_daily_data_limit_365d  → Resting HR, HR Zones, Activity Minutes, Steps/Calories/Distance
-#
-# All Google endpoints used are from the official Google Health API docs:
-# https://developers.google.com/health/data-types
-#
-# Measurement names are kept identical to the Fitbit originals so the
-# existing Grafana dashboard works without changes.
-# =============================================================================
- 
-# Max range is 30 days — HRV, BR, Skin Temp, SPO2 intraday, Weight/BMI
+
+
 def get_daily_data_limit_30d(start_date_str, end_date_str):
     if HEALTH_API_PROVIDER == "google":
  
@@ -1305,7 +1110,6 @@ def get_daily_data_limit_30d(start_date_str, end_date_str):
         logging.error("Recording failed : weight and BMI for date " + start_date_str + " to " + end_date_str)
 
 
-# Sleep data — limit 100 days
 def get_daily_data_limit_100d(start_date_str, end_date_str):
     # Google sleep endpoint: data_type = "sleep", session record
     # Google structure differs significantly from Fitbit API:
@@ -1494,9 +1298,8 @@ def get_daily_data_limit_100d(start_date_str, end_date_str):
         logging.info("Recorded Sleep data for date " + start_date_str + " to " + end_date_str)
     else:
         logging.error("Recording failed : Sleep data for date " + start_date_str + " to " + end_date_str)
- 
- 
-# Max date range 1 year — Resting HR, HR Zones, Activity Minutes, Steps/Calories/Distance
+
+
 def get_daily_data_limit_365d(start_date_str, end_date_str):
     if HEALTH_API_PROVIDER == "google":
  
@@ -1818,9 +1621,8 @@ def get_daily_data_limit_365d(start_date_str, end_date_str):
         logging.info("Recorded HR zone minutes for date " + start_date_str + " to " + end_date_str)
     else:
         logging.error("Recording failed : HR zone minutes for date " + start_date_str + " to " + end_date_str)
- 
 
-# records SPO2 single days for the whole given period - 1 query
+
 def get_daily_data_limit_none(start_date_str, end_date_str):
     if HEALTH_API_PROVIDER == "google":
         try:
@@ -1884,7 +1686,7 @@ def get_daily_data_limit_none(start_date_str, end_date_str):
     else:
         logging.error("Recording failed : Avg SPO2 for date " + start_date_str + " to " + end_date_str)
 
-# fetches TCX GPS data
+
 def get_tcx_data(tcx_url, ActivityID, ActivityName):
     tcx_headers = {
         "Authorization": f"Bearer {ACCESS_TOKEN}",
@@ -1945,7 +1747,7 @@ def get_tcx_data(tcx_url, ActivityID, ActivityName):
                         "fields": {"ActivityId": ActivityID, **fields}
                     })
 
-# Fetches latest activities from record ( upto last 50 )
+
 def fetch_latest_activities(end_date_str):
     if HEALTH_API_PROVIDER == "google":
         # The exercise endpoint returns the most recent records first. We pull the unfiltered
@@ -2036,89 +1838,275 @@ def fetch_latest_activities(end_date_str):
         logging.error("Fetching 50 recent activities failed : before date " + end_date_str)
 
 
-# %% [markdown]
-# ## Call the functions one time as a startup update OR do switch to bulk update mode
+def main():
+    """Run the legacy worker explicitly; importing this module is safe."""
+    global ACCESS_TOKEN, AUTO_DATE_RANGE, DEVICENAME, DEVICE_ID, DEVICE_METADATA_STATE_PATH, DRY_RUN_MODE, EXPIRED_TOKEN_MAX_RETRY, FITBIT_API_BASE_URL, FITBIT_LANGUAGE, FITBIT_LOG_FILE_PATH, GOOGLE_DEVICE_METADATA, GOOGLE_HEALTH_API_VERSION, GOOGLE_HEALTH_BASE_URL, GOOGLE_OAUTH_TOKEN_URL, HEALTH_API_PROVIDER, INFLUXDB_BUCKET, INFLUXDB_DATABASE, INFLUXDB_HOST, INFLUXDB_ORG, INFLUXDB_PASSWORD, INFLUXDB_PORT, INFLUXDB_TOKEN, INFLUXDB_URL, INFLUXDB_USERNAME, INFLUXDB_V3_ACCESS_TOKEN, INFLUXDB_VERSION, LOCAL_TIMEZONE, LOG_LEVEL, LOG_LEVEL_NAME, MANUAL_END_DATE, MANUAL_START_DATE, OVERWRITE_LOG_FILE, PENDING_DEVICE_METADATA_SIGNATURE, REQUEST_MAX_RETRIES, REQUEST_TIMEOUT_SECONDS, SCHEDULE_AUTO_UPDATE, SERVER_ERROR_MAX_RETRY, SKIP_REQUEST_ON_SERVER_ERROR, TOKEN_FILE_PATH, USER_ID, auto_update_date_range, client_id, client_secret, collected_records, date_list, date_range, date_str, demo_point, discovered_device_name, end_date, end_date_str, end_index, google_client_id, google_client_secret, i, influxdb_write_api, influxdbclient, single_day, start_date, start_date_str, start_index
+    load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-# %%
-if AUTO_DATE_RANGE:
-    date_list = [(start_date + timedelta(days=i)).strftime("%Y-%m-%d") for i in range((end_date - start_date).days + 1)]
-    if len(date_list) > 3:
-        logging.warn("Auto schedule update is not meant for more than 3 days at a time, please consider lowering the auto_update_date_range variable to aviod rate limit hit!")
-    for date_str in date_list:
-        get_intraday_data_limit_1d(date_str, [('heart','HeartRate_Intraday','1sec'),('steps','Steps_Intraday','1min')]) # 2 queries x number of dates ( default 2)
-    get_daily_data_limit_30d(start_date_str, end_date_str) # 3 queries
-    get_daily_data_limit_100d(start_date_str, end_date_str) # 1 query
-    get_daily_data_limit_365d(start_date_str, end_date_str) # 8 queries
-    get_daily_data_limit_none(start_date_str, end_date_str) # 1 query
-    get_battery_level() # 1 query
-    get_device_metadata()
-    fetch_latest_activities(end_date_str) # 1 query
-    write_points_to_influxdb(collected_records)
+    FITBIT_LOG_FILE_PATH = os.environ.get("FITBIT_LOG_FILE_PATH") or "your/expected/log/file/location/path"
+
+    TOKEN_FILE_PATH = os.environ.get("TOKEN_FILE_PATH") or "your/expected/token/file/location/path"
+
+    OVERWRITE_LOG_FILE = True
+
+    FITBIT_LANGUAGE = 'en_US'
+
+    HEALTH_API_PROVIDER = (os.environ.get("HEALTH_API_PROVIDER") or "fitbit").strip().lower()
+
+    assert HEALTH_API_PROVIDER in ["fitbit", "google"], "HEALTH_API_PROVIDER must be either 'fitbit' or 'google'"
+
+    FITBIT_API_BASE_URL = "https://api.fitbit.com"
+
+    GOOGLE_HEALTH_BASE_URL = os.environ.get("GOOGLE_HEALTH_BASE_URL") or "https://health.googleapis.com"
+
+    GOOGLE_HEALTH_API_VERSION = os.environ.get("GOOGLE_HEALTH_API_VERSION") or "v4"
+
+    GOOGLE_OAUTH_TOKEN_URL = os.environ.get("GOOGLE_OAUTH_TOKEN_URL") or "https://oauth2.googleapis.com/token"
+
+    INFLUXDB_VERSION = os.environ.get("INFLUXDB_VERSION") or "1"
+
+    assert INFLUXDB_VERSION in ['1','2','3'], "Only InfluxDB version 1 or 2 or 3 is allowed - please put either 1 or 2 or 3"
+
+    INFLUXDB_HOST = os.environ.get("INFLUXDB_HOST") or 'localhost'
+
+    INFLUXDB_PORT = os.environ.get("INFLUXDB_PORT") or 8086
+
+    INFLUXDB_USERNAME = os.environ.get("INFLUXDB_USERNAME") or 'your_influxdb_username'
+
+    INFLUXDB_PASSWORD = os.environ.get("INFLUXDB_PASSWORD") or 'your_influxdb_password'
+
+    INFLUXDB_DATABASE = os.environ.get("INFLUXDB_DATABASE") or 'your_influxdb_database_name'
+
+    INFLUXDB_BUCKET = os.environ.get("INFLUXDB_BUCKET") or "your_bucket_name_here"
+
+    INFLUXDB_ORG = os.environ.get("INFLUXDB_ORG") or "your_org_here"
+
+    INFLUXDB_TOKEN = os.environ.get("INFLUXDB_TOKEN") or "your_token_here"
+
+    INFLUXDB_URL = os.environ.get("INFLUXDB_URL") or "http://your_url_here:8086"
+
+    INFLUXDB_V3_ACCESS_TOKEN = os.getenv("INFLUXDB_V3_ACCESS_TOKEN",'')
+
+    client_id = os.environ.get("CLIENT_ID") or "your_application_client_ID"
+
+    client_secret = os.environ.get("CLIENT_SECRET") or "your_application_client_secret"
+
+    google_client_id = os.environ.get("GOOGLE_CLIENT_ID") or client_id
+
+    google_client_secret = os.environ.get("GOOGLE_CLIENT_SECRET") or client_secret
+
+    DEVICENAME = os.environ.get("DEVICENAME") or "Your_Device_Name"
+
+    USER_ID = os.environ.get("USER_ID") or "user_001"
+
+    DEVICE_ID = os.environ.get("DEVICE_ID") or "fitbit_air_001"
+
+    DEVICE_METADATA_STATE_PATH = os.environ.get("DEVICE_METADATA_STATE_PATH") or os.path.join(os.path.dirname(TOKEN_FILE_PATH), "device_metadata_state.json")
+
+    ACCESS_TOKEN = ""
+
+    MANUAL_START_DATE = os.getenv("MANUAL_START_DATE", None)
+
+    MANUAL_END_DATE = os.getenv("MANUAL_END_DATE", datetime.today().strftime('%Y-%m-%d'))
+
+    AUTO_DATE_RANGE = False if os.environ.get("AUTO_DATE_RANGE") in ['False','false','FALSE','f','F','no','No','NO','0'] else (not bool(MANUAL_START_DATE))
+
+    auto_update_date_range = 1
+
+    LOCAL_TIMEZONE = os.environ.get("LOCAL_TIMEZONE") or "Automatic"
+
+    SCHEDULE_AUTO_UPDATE = True if AUTO_DATE_RANGE else False
+
+    SERVER_ERROR_MAX_RETRY = 3
+
+    EXPIRED_TOKEN_MAX_RETRY = 5
+
+    SKIP_REQUEST_ON_SERVER_ERROR = True
+
+    REQUEST_MAX_RETRIES = int(os.environ.get("REQUEST_MAX_RETRIES") or "5")
+
+    REQUEST_TIMEOUT_SECONDS = int(os.environ.get("REQUEST_TIMEOUT_SECONDS") or "30")
+
+    DRY_RUN_MODE = str(os.environ.get("DRY_RUN_MODE", "False")).lower() in ["true", "1", "yes", "y"]
+
+    LOG_LEVEL_NAME = (os.environ.get("LOG_LEVEL") or "DEBUG").strip().upper()
+
+    LOG_LEVEL = getattr(logging, LOG_LEVEL_NAME, None)
+
+    if not isinstance(LOG_LEVEL, int):
+        print(f"Invalid LOG_LEVEL '{LOG_LEVEL_NAME}'. Falling back to DEBUG.")
+        LOG_LEVEL = logging.DEBUG
+        LOG_LEVEL_NAME = "DEBUG"
+
+    if OVERWRITE_LOG_FILE:
+        with open(FITBIT_LOG_FILE_PATH, "w"): pass
+
+    logging.basicConfig(
+        level=LOG_LEVEL,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler(FITBIT_LOG_FILE_PATH, mode='a'),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+
+    logging.info("Logging level set to %s", LOG_LEVEL_NAME)
+
+    ACCESS_TOKEN = Get_New_Access_Token(client_id, client_secret)
+
+    if DRY_RUN_MODE:
+        influxdbclient = None
+        influxdb_write_api = None
+        logging.warning("DRY_RUN_MODE is enabled. InfluxDB initialization and writes are skipped.")
+    elif INFLUXDB_VERSION == "2":
+        try:
+            influxdbclient = InfluxDBClient2(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
+            influxdb_write_api = influxdbclient.write_api(write_options=SYNCHRONOUS)
+        except InfluxDBError as err:
+            logging.error("Unable to connect with influxdb 2.x database! Aborted")
+            raise InfluxDBError("InfluxDB connection failed:" + str(err))
+    elif INFLUXDB_VERSION == "1":
+        try:
+            influxdbclient = InfluxDBClient(host=INFLUXDB_HOST, port=INFLUXDB_PORT, username=INFLUXDB_USERNAME, password=INFLUXDB_PASSWORD)
+            influxdbclient.switch_database(INFLUXDB_DATABASE)
+        except InfluxDBClientError as err:
+            logging.error("Unable to connect with influxdb 1.x database! Aborted")
+            raise InfluxDBClientError("InfluxDB connection failed:" + str(err))
+    elif INFLUXDB_VERSION == "3":
+        try:
+            influxdbclient = InfluxDBClient3(
+                    host=f"http://{INFLUXDB_HOST}:{INFLUXDB_PORT}",
+                    token=INFLUXDB_V3_ACCESS_TOKEN,
+                    database=INFLUXDB_DATABASE
+                    )
+            demo_point = {
+            'measurement': 'DemoPoint',
+            'time': '1970-01-01T00:00:00+00:00',
+            'tags': {'DemoTag': 'DemoTagValue'},
+            'fields': {'DemoField': 0}
+            }
+            # The following code block tests the connection by writing/overwriting a demo point. raises error and aborts if connection fails. 
+            influxdbclient.write(record=[demo_point])
+        except InfluxDBError as err:
+            logging.error("Unable to connect with influxdb 3.x database! Aborted")
+            raise InfluxDBClientError("InfluxDB connection failed:" + str(err))
+    else:
+        logging.error("No matching version found. Supported values are 1 and 2 and 3")
+        raise InfluxDBClientError("No matching version found. Supported values are 1 and 2 and 3")
+
+    detect_influx_field_type_compatibility()
+
+    PENDING_DEVICE_METADATA_SIGNATURE = None
+
+    if LOCAL_TIMEZONE == "Automatic":
+        LOCAL_TIMEZONE = pytz.timezone(get_user_timezone_name())
+    else:
+        LOCAL_TIMEZONE = pytz.timezone(LOCAL_TIMEZONE)
+
+    GOOGLE_DEVICE_METADATA = {}
+
+    if HEALTH_API_PROVIDER == "google":
+        GOOGLE_DEVICE_METADATA = discover_google_device_metadata()
+
+    if HEALTH_API_PROVIDER == "google" and DEVICENAME == "Your_Device_Name":
+        discovered_device_name = GOOGLE_DEVICE_METADATA.get("deviceName")
+        if discovered_device_name:
+            logging.info("Auto-detected Google device displayName: %s (override with DEVICENAME env var)", discovered_device_name)
+            DEVICENAME = discovered_device_name
+        else:
+            logging.info("Could not auto-detect device displayName from Google Health API; keeping default '%s'", DEVICENAME)
+
+    if AUTO_DATE_RANGE:
+        end_date = datetime.now(LOCAL_TIMEZONE)
+        start_date = end_date - timedelta(days=auto_update_date_range)
+        end_date_str = end_date.strftime("%Y-%m-%d")
+        start_date_str = start_date.strftime("%Y-%m-%d")
+    else:
+        start_date_str = MANUAL_START_DATE or input("Enter start date in YYYY-MM-DD format : ")
+        end_date_str = MANUAL_END_DATE or input("Enter end date in YYYY-MM-DD format : ")
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+        end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
+
     collected_records = []
-else:
-    # Do Bulk update----------------------------------------------------------------------------------------------------------------------------
 
-    schedule.every(1).hours.do(lambda : Get_New_Access_Token(client_id,client_secret)) # Auto-refresh tokens every 1 hour
-    
-    date_list = [(start_date + timedelta(days=i)).strftime("%Y-%m-%d") for i in range((end_date - start_date).days + 1)]
-
-    def yield_dates_with_gap(date_list, gap):
-        start_index = -1*gap
-        while start_index < len(date_list)-1:
-            start_index  = start_index + gap
-            end_index = start_index+gap
-            if end_index > len(date_list) - 1:
-                end_index = len(date_list) - 1
-            if start_index > len(date_list) - 1:
-                break
-            yield (date_list[start_index],date_list[end_index])
-
-    def do_bulk_update(funcname, start_date, end_date):
-        global collected_records
-        funcname(start_date, end_date)
-        schedule.run_pending()
+    if AUTO_DATE_RANGE:
+        date_list = [(start_date + timedelta(days=i)).strftime("%Y-%m-%d") for i in range((end_date - start_date).days + 1)]
+        if len(date_list) > 3:
+            logging.warn("Auto schedule update is not meant for more than 3 days at a time, please consider lowering the auto_update_date_range variable to aviod rate limit hit!")
+        for date_str in date_list:
+            get_intraday_data_limit_1d(date_str, [('heart','HeartRate_Intraday','1sec'),('steps','Steps_Intraday','1min')]) # 2 queries x number of dates ( default 2)
+        get_daily_data_limit_30d(start_date_str, end_date_str) # 3 queries
+        get_daily_data_limit_100d(start_date_str, end_date_str) # 1 query
+        get_daily_data_limit_365d(start_date_str, end_date_str) # 8 queries
+        get_daily_data_limit_none(start_date_str, end_date_str) # 1 query
+        get_battery_level() # 1 query
+        get_device_metadata()
+        fetch_latest_activities(end_date_str) # 1 query
         write_points_to_influxdb(collected_records)
         collected_records = []
+    else:
+        # Do Bulk update----------------------------------------------------------------------------------------------------------------------------
 
-    get_device_metadata()
-    fetch_latest_activities(date_list[-1])
-    write_points_to_influxdb(collected_records)
-    collected_records = []
-    do_bulk_update(get_daily_data_limit_none, date_list[0], date_list[-1])
-    for date_range in yield_dates_with_gap(date_list, 360):
-        do_bulk_update(get_daily_data_limit_365d, date_range[0], date_range[1])
-    for date_range in yield_dates_with_gap(date_list, 98):
-        do_bulk_update(get_daily_data_limit_100d, date_range[0], date_range[1])
-    for date_range in yield_dates_with_gap(date_list, 28):
-        do_bulk_update(get_daily_data_limit_30d, date_range[0], date_range[1])
-    for single_day in date_list:
-        do_bulk_update(get_intraday_data_limit_1d, single_day, [('heart','HeartRate_Intraday','1sec'),('steps','Steps_Intraday','1min')])
-
-    logging.info("Success : Bulk update complete for " + start_date_str + " to " + end_date_str)
-    print("Bulk update complete!")
-
-# %% [markdown]
-# ## Schedule functions at specific intervals (Ongoing continuous update)
-
-# %%
-# Ongoing continuous update of data
-if SCHEDULE_AUTO_UPDATE:
+        schedule.every(1).hours.do(lambda : Get_New_Access_Token(client_id,client_secret)) # Auto-refresh tokens every 1 hour
     
-    schedule.every(1).hours.do(lambda : Get_New_Access_Token(client_id,client_secret)) # Auto-refresh tokens every 1 hour
-    schedule.every(3).minutes.do( lambda : get_intraday_data_limit_1d(end_date_str, [('heart','HeartRate_Intraday','1sec'),('steps','Steps_Intraday','1min')] )) # Auto-refresh detailed HR and steps
-    schedule.every(1).hours.do( lambda : get_intraday_data_limit_1d((datetime.strptime(end_date_str, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d"), [('heart','HeartRate_Intraday','1sec'),('steps','Steps_Intraday','1min')] )) # Refilling any missing data on previous day end of night due to fitbit sync delay ( see issue #10 )
-    schedule.every(20).minutes.do(get_battery_level) # Auto-refresh battery level
-    schedule.every(20).minutes.do(get_device_metadata)
-    schedule.every(3).hours.do(lambda : get_daily_data_limit_30d(start_date_str, end_date_str))
-    schedule.every(4).hours.do(lambda : get_daily_data_limit_100d(start_date_str, end_date_str))
-    schedule.every(6).hours.do( lambda : get_daily_data_limit_365d(start_date_str, end_date_str))
-    schedule.every(6).hours.do(lambda : get_daily_data_limit_none(start_date_str, end_date_str))
-    schedule.every(1).hours.do( lambda : fetch_latest_activities(end_date_str))
+        date_list = [(start_date + timedelta(days=i)).strftime("%Y-%m-%d") for i in range((end_date - start_date).days + 1)]
 
-    while True:
-        schedule.run_pending()
-        if len(collected_records) != 0:
+        def yield_dates_with_gap(date_list, gap):
+            start_index = -1*gap
+            while start_index < len(date_list)-1:
+                start_index  = start_index + gap
+                end_index = start_index+gap
+                if end_index > len(date_list) - 1:
+                    end_index = len(date_list) - 1
+                if start_index > len(date_list) - 1:
+                    break
+                yield (date_list[start_index],date_list[end_index])
+
+        def do_bulk_update(funcname, start_date, end_date):
+            global collected_records
+            funcname(start_date, end_date)
+            schedule.run_pending()
             write_points_to_influxdb(collected_records)
             collected_records = []
-        time.sleep(30)
-        update_working_dates()
+
+        get_device_metadata()
+        fetch_latest_activities(date_list[-1])
+        write_points_to_influxdb(collected_records)
+        collected_records = []
+        do_bulk_update(get_daily_data_limit_none, date_list[0], date_list[-1])
+        for date_range in yield_dates_with_gap(date_list, 360):
+            do_bulk_update(get_daily_data_limit_365d, date_range[0], date_range[1])
+        for date_range in yield_dates_with_gap(date_list, 98):
+            do_bulk_update(get_daily_data_limit_100d, date_range[0], date_range[1])
+        for date_range in yield_dates_with_gap(date_list, 28):
+            do_bulk_update(get_daily_data_limit_30d, date_range[0], date_range[1])
+        for single_day in date_list:
+            do_bulk_update(get_intraday_data_limit_1d, single_day, [('heart','HeartRate_Intraday','1sec'),('steps','Steps_Intraday','1min')])
+
+        logging.info("Success : Bulk update complete for " + start_date_str + " to " + end_date_str)
+        print("Bulk update complete!")
+
+    if SCHEDULE_AUTO_UPDATE:
+    
+        schedule.every(1).hours.do(lambda : Get_New_Access_Token(client_id,client_secret)) # Auto-refresh tokens every 1 hour
+        schedule.every(3).minutes.do( lambda : get_intraday_data_limit_1d(end_date_str, [('heart','HeartRate_Intraday','1sec'),('steps','Steps_Intraday','1min')] )) # Auto-refresh detailed HR and steps
+        schedule.every(1).hours.do( lambda : get_intraday_data_limit_1d((datetime.strptime(end_date_str, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d"), [('heart','HeartRate_Intraday','1sec'),('steps','Steps_Intraday','1min')] )) # Refilling any missing data on previous day end of night due to fitbit sync delay ( see issue #10 )
+        schedule.every(20).minutes.do(get_battery_level) # Auto-refresh battery level
+        schedule.every(20).minutes.do(get_device_metadata)
+        schedule.every(3).hours.do(lambda : get_daily_data_limit_30d(start_date_str, end_date_str))
+        schedule.every(4).hours.do(lambda : get_daily_data_limit_100d(start_date_str, end_date_str))
+        schedule.every(6).hours.do( lambda : get_daily_data_limit_365d(start_date_str, end_date_str))
+        schedule.every(6).hours.do(lambda : get_daily_data_limit_none(start_date_str, end_date_str))
+        schedule.every(1).hours.do( lambda : fetch_latest_activities(end_date_str))
+
+        while True:
+            schedule.run_pending()
+            if len(collected_records) != 0:
+                write_points_to_influxdb(collected_records)
+                collected_records = []
+            time.sleep(30)
+            update_working_dates()
+
+
+if __name__ == "__main__":
+    main()
