@@ -69,3 +69,13 @@ def test_devices_latest_observations_and_scoped_sql(setup):
     for tag in ("UserId", "Provider", "DeviceId"):
         assert '"' + tag + '" =' in sql
     assert "ORDER BY time DESC LIMIT 1" in sql
+
+
+def test_oversized_result_is_rejected_without_partial_data(setup, monkeypatch):
+    cfg, db, gemini, clock = setup
+    monkeypatch.setattr("app.api.health_service.MAX_ROWS", 1)
+    db.query.return_value = [{"time": "2026-03-08T08:00:00Z", "value": 1}] * 2
+    with TestClient(create_app(cfg, db, gemini, clock)) as client:
+        result = client.get("/api/health/body", headers={"Authorization": "Bearer " + cfg.api_token})
+        assert result.status_code == 422
+        assert "series" not in result.json()
