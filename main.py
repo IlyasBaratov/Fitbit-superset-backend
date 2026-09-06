@@ -1,3 +1,4 @@
+from app.providers.fitbit.auth import FitbitTokenManager
 from app.storage.influx.repository import InfluxHealthRepository
 from app.domain.models import HealthPoint
 from app.core.logging import configure_logging
@@ -422,30 +423,6 @@ def save_tokens_to_file(access_token, refresh_token, provider, expires_in=None):
         json.dump(tokens, file)
 
 
-def refresh_fitbit_tokens(client_id, client_secret, refresh_token):
-    logging.info("Attempting to refresh tokens...")
-    url = f"{FITBIT_API_BASE_URL}/oauth2/token"
-    headers = {
-        "Authorization": "Basic " + base64.b64encode((client_id + ":" + client_secret).encode()).decode(),
-        "Content-Type": "application/x-www-form-urlencoded"
-    }
-    data = {
-        "grant_type": "refresh_token",
-        "refresh_token": refresh_token
-    }
-    response = requests.post(url, headers=headers, data=data, timeout=REQUEST_TIMEOUT_SECONDS)
-    if response.status_code != 200:
-        logging.error("Fitbit token refresh failed with HTTP %s", response.status_code)
-        response.raise_for_status()
-
-    json_data = response.json()
-    access_token = json_data["access_token"]
-    new_refresh_token = json_data["refresh_token"]
-    save_tokens_to_file(access_token, new_refresh_token, "fitbit", json_data.get("expires_in"))
-    logging.info("Fitbit token refresh successful!")
-    return access_token, new_refresh_token
-
-
 def refresh_google_tokens(client_id, client_secret, refresh_token):
     logging.info("Attempting to refresh Google Health API tokens...")
     data = {
@@ -481,6 +458,8 @@ def get_active_credentials(client_id, client_secret):
 
 
 def Get_New_Access_Token(client_id, client_secret):
+    if HEALTH_API_PROVIDER == "fitbit":
+        return token_manager.refresh()
     active_client_id, active_client_secret = get_active_credentials(client_id, client_secret)
     try:
         access_token, refresh_token, provider_in_file = load_tokens_from_file()
@@ -489,9 +468,7 @@ def Get_New_Access_Token(client_id, client_secret):
     except FileNotFoundError:
         refresh_token = input(f"No token file found. Please enter a valid {HEALTH_API_PROVIDER} refresh token : ")
 
-    if HEALTH_API_PROVIDER == "fitbit":
-        access_token, refresh_token = refresh_fitbit_tokens(active_client_id, active_client_secret, refresh_token)
-    elif HEALTH_API_PROVIDER == "google":
+    if HEALTH_API_PROVIDER == "google":
         access_token, refresh_token = refresh_google_tokens(active_client_id, active_client_secret, refresh_token)
     else:
         raise ValueError(f"Unsupported provider: {HEALTH_API_PROVIDER}")
@@ -1777,7 +1754,7 @@ def fetch_latest_activities(end_date_str):
 
 def main():
     """Run the legacy worker explicitly; importing this module is safe."""
-    global repository, ACCESS_TOKEN, AUTO_DATE_RANGE, DEVICENAME, DEVICE_ID, DEVICE_METADATA_STATE_PATH, DRY_RUN_MODE, EXPIRED_TOKEN_MAX_RETRY, FITBIT_API_BASE_URL, FITBIT_LANGUAGE, FITBIT_LOG_FILE_PATH, GOOGLE_DEVICE_METADATA, GOOGLE_HEALTH_API_VERSION, GOOGLE_HEALTH_BASE_URL, GOOGLE_OAUTH_TOKEN_URL, HEALTH_API_PROVIDER, INFLUXDB_BUCKET, INFLUXDB_DATABASE, INFLUXDB_HOST, INFLUXDB_ORG, INFLUXDB_PASSWORD, INFLUXDB_PORT, INFLUXDB_TOKEN, INFLUXDB_URL, INFLUXDB_USERNAME, INFLUXDB_V3_ACCESS_TOKEN, INFLUXDB_VERSION, LOCAL_TIMEZONE, LOG_LEVEL, LOG_LEVEL_NAME, MANUAL_END_DATE, MANUAL_START_DATE, OVERWRITE_LOG_FILE, PENDING_DEVICE_METADATA_SIGNATURE, REQUEST_MAX_RETRIES, REQUEST_TIMEOUT_SECONDS, SCHEDULE_AUTO_UPDATE, SERVER_ERROR_MAX_RETRY, SKIP_REQUEST_ON_SERVER_ERROR, TOKEN_FILE_PATH, USER_ID, auto_update_date_range, client_id, client_secret, collected_records, date_list, date_range, date_str, demo_point, discovered_device_name, end_date, end_date_str, end_index, google_client_id, google_client_secret, i, influxdb_write_api, influxdbclient, single_day, start_date, start_date_str, start_index
+    global token_manager, repository, ACCESS_TOKEN, AUTO_DATE_RANGE, DEVICENAME, DEVICE_ID, DEVICE_METADATA_STATE_PATH, DRY_RUN_MODE, EXPIRED_TOKEN_MAX_RETRY, FITBIT_API_BASE_URL, FITBIT_LANGUAGE, FITBIT_LOG_FILE_PATH, GOOGLE_DEVICE_METADATA, GOOGLE_HEALTH_API_VERSION, GOOGLE_HEALTH_BASE_URL, GOOGLE_OAUTH_TOKEN_URL, HEALTH_API_PROVIDER, INFLUXDB_BUCKET, INFLUXDB_DATABASE, INFLUXDB_HOST, INFLUXDB_ORG, INFLUXDB_PASSWORD, INFLUXDB_PORT, INFLUXDB_TOKEN, INFLUXDB_URL, INFLUXDB_USERNAME, INFLUXDB_V3_ACCESS_TOKEN, INFLUXDB_VERSION, LOCAL_TIMEZONE, LOG_LEVEL, LOG_LEVEL_NAME, MANUAL_END_DATE, MANUAL_START_DATE, OVERWRITE_LOG_FILE, PENDING_DEVICE_METADATA_SIGNATURE, REQUEST_MAX_RETRIES, REQUEST_TIMEOUT_SECONDS, SCHEDULE_AUTO_UPDATE, SERVER_ERROR_MAX_RETRY, SKIP_REQUEST_ON_SERVER_ERROR, TOKEN_FILE_PATH, USER_ID, auto_update_date_range, client_id, client_secret, collected_records, date_list, date_range, date_str, demo_point, discovered_device_name, end_date, end_date_str, end_index, google_client_id, google_client_secret, i, influxdb_write_api, influxdbclient, single_day, start_date, start_date_str, start_index
     settings = WorkerSettings.from_env()
     FITBIT_LOG_FILE_PATH = settings.fitbit_log_file_path
     TOKEN_FILE_PATH = settings.token_file_path
@@ -1827,6 +1804,7 @@ def main():
                       secrets=(client_secret, google_client_secret, INFLUXDB_PASSWORD, INFLUXDB_TOKEN, INFLUXDB_V3_ACCESS_TOKEN),
                       overwrite=OVERWRITE_LOG_FILE)
 
+    token_manager = FitbitTokenManager(settings) if HEALTH_API_PROVIDER == "fitbit" else None
     ACCESS_TOKEN = Get_New_Access_Token(client_id, client_secret)
 
     repository = InfluxHealthRepository(settings, build_common_tags(USER_ID, HEALTH_API_PROVIDER, DEVICENAME, DEVICE_ID), "UTC")
