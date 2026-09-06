@@ -20,6 +20,13 @@ class Settings:
     default_days: int = 7
     max_days: int = 90
     cache_seconds: int = 300
+    gemini_timeout_ms: int = 45000
+    gemini_retry_attempts: int = 3
+    gemini_retry_base_ms: int = 250
+    gemini_retry_max_backoff_ms: int = 2000
+    gemini_retry_jitter_ms: int = 200
+    gemini_retry_max_elapsed_ms: int = 55000
+    fallback_model: str = ""
 
     def __post_init__(self):
         if len(self.api_token) < 32:
@@ -30,6 +37,14 @@ class Settings:
             raise ValueError("User, provider and device configuration are required")
         if not 1 <= self.default_days <= self.max_days <= 90:
             raise ValueError("Analysis days must satisfy 1 <= default <= maximum <= 90")
+        if self.gemini_timeout_ms <= 0:
+            raise ValueError("GEMINI_TIMEOUT_MS must be positive")
+        if self.gemini_retry_attempts < 1:
+            raise ValueError("GEMINI_RETRY_ATTEMPTS must be at least 1")
+        if min(self.gemini_retry_base_ms, self.gemini_retry_max_backoff_ms, self.gemini_retry_jitter_ms) < 0:
+            raise ValueError("Gemini retry timing values must be non-negative")
+        if self.gemini_retry_max_elapsed_ms <= 0:
+            raise ValueError("GEMINI_RETRY_MAX_ELAPSED_MS must be positive")
         pytz.timezone(self.timezone)
 
     @classmethod
@@ -46,4 +61,11 @@ class Settings:
             influx_database=os.getenv("INFLUXDB_DATABASE", "FitbitHealthStats"),
             influx_username=os.getenv("INFLUXDB_USERNAME", ""), influx_password=os.getenv("INFLUXDB_PASSWORD", ""),
             default_days=int(os.getenv("AI_DEFAULT_ANALYSIS_DAYS", "7")),
-            max_days=int(os.getenv("AI_MAX_ANALYSIS_DAYS", "90")))
+            max_days=int(os.getenv("AI_MAX_ANALYSIS_DAYS", "90")),
+            gemini_timeout_ms=int(os.getenv("GEMINI_TIMEOUT_MS", "45000")),
+            gemini_retry_attempts=int(os.getenv("GEMINI_RETRY_ATTEMPTS", "3")),
+            gemini_retry_base_ms=int(os.getenv("GEMINI_RETRY_BASE_MS", "250")),
+            gemini_retry_max_backoff_ms=int(os.getenv("GEMINI_RETRY_MAX_BACKOFF_MS", "2000")),
+            gemini_retry_jitter_ms=int(os.getenv("GEMINI_RETRY_JITTER_MS", "200")),
+            gemini_retry_max_elapsed_ms=int(os.getenv("GEMINI_RETRY_MAX_ELAPSED_MS", "55000")),
+            fallback_model=os.getenv("GEMINI_FALLBACK_MODEL", ""))
