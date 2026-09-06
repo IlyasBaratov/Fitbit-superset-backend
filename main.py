@@ -1,3 +1,4 @@
+from app.providers.fitbit.provider import FitbitProvider
 from app.providers.google_health.provider import GoogleHealthProvider
 from app.providers.fitbit.client import FitbitClient
 from app.providers.google_health import parsing as google_parsing
@@ -201,522 +202,45 @@ def update_working_dates():
 
 
 def get_battery_level():
-    if HEALTH_API_PROVIDER == "google":
-        logging.warning("Battery level endpoint is not mapped for Google Health API yet. Skipping DeviceBatteryLevel update.")
-        return
-
-    device = fitbit_client.devices()[0]
-    if device != None:
-        collected_records.append({
-            "measurement": "DeviceBatteryLevel",
-            "time": LOCAL_TIMEZONE.localize(datetime.fromisoformat(device['lastSyncTime'])).astimezone(pytz.utc).isoformat(),
-            "fields": {
-                "value": float(device['batteryLevel'])
-            }
-        })
-        logging.info("Recorded battery level for " + DEVICENAME)
-    else:
-        logging.error("Recording battery level failed : " + DEVICENAME)
+    provider = google_provider if HEALTH_API_PROVIDER == "google" else fitbit_provider
+    collected_records.extend(point.as_record() for point in provider.fetch_battery())
 
 
 def get_intraday_data_limit_1d(date_str, measurement_list):
-    if HEALTH_API_PROVIDER == "google":
-        collected_records.extend(point.as_record() for point in google_provider.fetch_intraday(date_str, measurement_list))
-        return
-
-    for measurement in measurement_list:
-        data = fitbit_client.intraday(measurement[0], date_str, measurement[2])["activities-" + measurement[0] + "-intraday"]['dataset']
-        if data != None:
-            for value in data:
-                log_time = datetime.fromisoformat(date_str + "T" + value['time'])
-                utc_time = LOCAL_TIMEZONE.localize(log_time).astimezone(pytz.utc).isoformat()
-                collected_records.append({
-                        "measurement":  measurement[1],
-                        "time": utc_time,
-                        "tags": {
-                            "Device": DEVICENAME
-                        },
-                        "fields": {
-                            "value": int(value['value'])
-                        }
-                    })
-            logging.info("Recorded " +  measurement[1] + " intraday for date " + date_str)
-        else:
-            logging.error("Recording failed : " +  measurement[1] + " intraday for date " + date_str)
+    provider = google_provider if HEALTH_API_PROVIDER == "google" else fitbit_provider
+    collected_records.extend(point.as_record() for point in provider.fetch_intraday(date_str, measurement_list))
 
 
 def get_daily_data_limit_30d(start_date_str, end_date_str):
-    if HEALTH_API_PROVIDER == "google":
-        collected_records.extend(point.as_record() for point in google_provider.fetch_daily_group("30d", start_date_str, end_date_str))
-        return
- 
-    # --- Original Fitbit path (unchanged) ---
-    hrv_data_list = fitbit_client.hrv(start_date_str, end_date_str).get('hrv')
-    if hrv_data_list != None:
-        for data in hrv_data_list:
-            log_time = datetime.fromisoformat(data["dateTime"] + "T" + "00:00:00")
-            utc_time = LOCAL_TIMEZONE.localize(log_time).astimezone(pytz.utc).isoformat()
-            collected_records.append({
-                    "measurement":  "HRV",
-                    "time": utc_time,
-                    "tags": {
-                        "Device": DEVICENAME
-                    },
-                    "fields": {
-                        "dailyRmssd": float(data["value"]["dailyRmssd"]) if data["value"]["dailyRmssd"] else None,
-                        "deepRmssd": float(data["value"]["deepRmssd"]) if data["value"]["deepRmssd"] else None
-                    }
-                })
-        logging.info("Recorded HRV for date " + start_date_str + " to " + end_date_str)
-    else:
-        logging.error("Recording failed HRV for date " + start_date_str + " to " + end_date_str)
- 
-    try:
-        br_response = fitbit_client.breathing(start_date_str, end_date_str)
-        br_data_list = br_response.get("br") if br_response else None
-    except requests.exceptions.HTTPError as e:
-        if e.response is not None and e.response.status_code == 403:
-            logging.warning("Skipping BR for date " + start_date_str + " to " + end_date_str + " due to missing permission (HTTP 403)")
-            br_data_list = None
-        else:
-            raise
-    if br_data_list != None:
-        for data in br_data_list:
-            log_time = datetime.fromisoformat(data["dateTime"] + "T" + "00:00:00")
-            utc_time = LOCAL_TIMEZONE.localize(log_time).astimezone(pytz.utc).isoformat()
-            collected_records.append({
-                    "measurement":  "BreathingRate",
-                    "time": utc_time,
-                    "tags": {
-                        "Device": DEVICENAME
-                    },
-                    "fields": {
-                        "value": float(data["value"]["breathingRate"])
-                    }
-                })
-        logging.info("Recorded BR for date " + start_date_str + " to " + end_date_str)
-    else:
-        logging.warning("Records not found : BR for date " + start_date_str + " to " + end_date_str)
- 
-    skin_temp_data_list = fitbit_client.skin_temperature(start_date_str, end_date_str).get("tempSkin")
-    if skin_temp_data_list != None:
-        for temp_record in skin_temp_data_list:
-            log_time = datetime.fromisoformat(temp_record["dateTime"] + "T" + "00:00:00")
-            utc_time = LOCAL_TIMEZONE.localize(log_time).astimezone(pytz.utc).isoformat()
-            collected_records.append({
-                    "measurement":  "Skin Temperature Variation",
-                    "time": utc_time,
-                    "tags": {
-                        "Device": DEVICENAME
-                    },
-                    "fields": {
-                        "RelativeValue": float(temp_record["value"]["nightlyRelative"])
-                    }
-                })
-        logging.info("Recorded Skin Temperature Variation for date " + start_date_str + " to " + end_date_str)
-    else:
-        logging.error("Recording failed : Skin Temperature Variation for date " + start_date_str + " to " + end_date_str)
- 
-    try:
-        spo2_data_list = fitbit_client.spo2_intraday(start_date_str, end_date_str)
-    except requests.exceptions.HTTPError as e:
-        logging.error(f"{e}")
-        spo2_data_list = None
-    if spo2_data_list != None:
-        for days in spo2_data_list:
-            data = days["minutes"]
-            for record in data:
-                log_time = datetime.fromisoformat(record["minute"])
-                utc_time = LOCAL_TIMEZONE.localize(log_time).astimezone(pytz.utc).isoformat()
-                collected_records.append({
-                        "measurement":  "SPO2_Intraday",
-                        "time": utc_time,
-                        "tags": {
-                            "Device": DEVICENAME
-                        },
-                        "fields": {
-                            "value": float(record["value"]),
-                        }
-                    })
-        logging.info("Recorded SPO2 intraday for date " + start_date_str + " to " + end_date_str)
-    else:
-        logging.error("Recording failed : SPO2 intraday for date " + start_date_str + " to " + end_date_str)
- 
-    weight_data_list = fitbit_client.weight(start_date_str, end_date_str).get("weight")
-    if weight_data_list != None:
-        for entry in weight_data_list:
-            log_time = datetime.fromisoformat(entry["date"] + "T" + entry["time"])
-            utc_time = LOCAL_TIMEZONE.localize(log_time).astimezone(pytz.utc).isoformat()
-            collected_records.append({
-                "measurement":  "weight",
-                "time": utc_time,
-                "tags": {
-                    "Device": DEVICENAME
-                },
-                "fields": {
-                    "value": float(entry["weight"]),
-                }
-            })
-            collected_records.append({
-                "measurement":  "bmi",
-                "time": utc_time,
-                "tags": {
-                    "Device": DEVICENAME
-                },
-                "fields": {
-                    "value": float(entry["bmi"]),
-                }
-            })
-        logging.info("Recorded weight and BMI for date " + start_date_str + " to " + end_date_str)
-    else:
-        logging.error("Recording failed : weight and BMI for date " + start_date_str + " to " + end_date_str)
+    provider = google_provider if HEALTH_API_PROVIDER == "google" else fitbit_provider
+    collected_records.extend(point.as_record() for point in provider.fetch_daily_group("30d", start_date_str, end_date_str))
 
 
 def get_daily_data_limit_100d(start_date_str, end_date_str):
-    # Google sleep endpoint: data_type = "sleep", session record
-    # Google structure differs significantly from Fitbit API:
-    #   sleep.summary.minutesAsleep/minutesAwake/minutesInSleepPeriod/stagesSummary
-    #   sleep.stages[] → { startTime, endTime, type: AWAKE/LIGHT/DEEP/REM }
-    #   sleep.interval → { startTime, endTime }
-    # No efficiency field — computed as minutesAsleep/minutesInSleepPeriod * 100
-    # All minute values returned as strings, not ints
-    if HEALTH_API_PROVIDER == "google":
-        collected_records.extend(point.as_record() for point in google_provider.fetch_daily_group("100d", start_date_str, end_date_str))
-        return
- 
-    # --- Original Fitbit path (unchanged) ---
-    sleep_data = fitbit_client.sleep(start_date_str, end_date_str).get("sleep")
-    if sleep_data != None:
-        for record in sleep_data:
-            log_time = datetime.fromisoformat(record["startTime"])
-            utc_time = LOCAL_TIMEZONE.localize(log_time).astimezone(pytz.utc).isoformat()
-            sleep_session_id = str(record.get("logId")) if record.get("logId") is not None else None
-            is_main_sleep = str(bool(record.get("isMainSleep"))).lower()
-            try:
-                minutesLight = record['levels']['summary']['light']['minutes']
-                minutesREM   = record['levels']['summary']['rem']['minutes']
-                minutesDeep  = record['levels']['summary']['deep']['minutes']
-            except KeyError:
-                minutesLight = record['levels']['summary']['asleep']['minutes']
-                minutesREM   = record['levels']['summary']['restless']['minutes']
-                minutesDeep  = 0
- 
-            collected_records.append({
-                    "measurement":  "Sleep Summary",
-                    "time": utc_time,
-                    "tags": {
-                        "Device": DEVICENAME,
-                        "isMainSleep": is_main_sleep,
-                    },
-                    "fields": sanitize_fields({
-                        'SleepSessionId': sleep_session_id,
-                        'efficiency': record["efficiency"],
-                        'minutesAfterWakeup': record['minutesAfterWakeup'],
-                        'minutesAsleep': record['minutesAsleep'],
-                        'minutesToFallAsleep': record['minutesToFallAsleep'],
-                        'minutesInBed': record['timeInBed'],
-                        'minutesAwake': record['minutesAwake'],
-                        'minutesLight': minutesLight,
-                        'minutesREM': minutesREM,
-                        'minutesDeep': minutesDeep,
-                        'startTime': record.get("startTime"),
-                        'endTime': record.get("endTime"),
-                    })
-                })
- 
-            for stage in record['levels']['data']:
-                log_time = datetime.fromisoformat(stage["dateTime"])
-                utc_time = LOCAL_TIMEZONE.localize(log_time).astimezone(pytz.utc).isoformat()
-                level, stage_name = sleep_stage(stage.get("level"))
-                collected_records.append({
-                        "measurement":  "Sleep Levels",
-                        "time": utc_time,
-                        "tags": {
-                            "Device": DEVICENAME,
-                            "isMainSleep": is_main_sleep,
-                        },
-                        "fields": {
-                            'SleepSessionId': sleep_session_id,
-                            'level': level,
-                            'stageName': stage_name,
-                            'duration_seconds': stage.get("seconds"),
-                        }
-                    })
-            wake_time = datetime.fromisoformat(record["endTime"])
-            utc_wake_time = LOCAL_TIMEZONE.localize(wake_time).astimezone(pytz.utc).isoformat()
-            collected_records.append({
-                        "measurement":  "Sleep Levels",
-                        "time": utc_wake_time,
-                        "tags": {
-                            "Device": DEVICENAME,
-                            "isMainSleep": is_main_sleep,
-                        },
-                        "fields": {
-                            'SleepSessionId': sleep_session_id,
-                            'level': 3,
-                            'stageName': "awake",
-                        }
-                    })
-        logging.info("Recorded Sleep data for date " + start_date_str + " to " + end_date_str)
-    else:
-        logging.error("Recording failed : Sleep data for date " + start_date_str + " to " + end_date_str)
+    provider = google_provider if HEALTH_API_PROVIDER == "google" else fitbit_provider
+    collected_records.extend(point.as_record() for point in provider.fetch_daily_group("100d", start_date_str, end_date_str))
 
 
 def get_daily_data_limit_365d(start_date_str, end_date_str):
-    if HEALTH_API_PROVIDER == "google":
-        collected_records.extend(point.as_record() for point in google_provider.fetch_daily_group("365d", start_date_str, end_date_str))
-        return
- 
-    # --- Original Fitbit path (unchanged) ---
-    activity_minutes_list = ["minutesSedentary", "minutesLightlyActive", "minutesFairlyActive", "minutesVeryActive"]
-    for activity_type in activity_minutes_list:
-        activity_minutes_data_list = fitbit_client.activity_series(activity_type, start_date_str, end_date_str).get("activities-tracker-"+activity_type)
-        if activity_minutes_data_list != None:
-            for data in activity_minutes_data_list:
-                log_time = datetime.fromisoformat(data["dateTime"] + "T" + "00:00:00")
-                utc_time = LOCAL_TIMEZONE.localize(log_time).astimezone(pytz.utc).isoformat()
-                collected_records.append({
-                        "measurement": "Activity Minutes",
-                        "time": utc_time,
-                        "tags": {
-                            "Device": DEVICENAME
-                        },
-                        "fields": {
-                            activity_type : int(data["value"])
-                        }
-                    })
-            logging.info("Recorded " + activity_type + "for date " + start_date_str + " to " + end_date_str)
-        else:
-            logging.error("Recording failed : " + activity_type + " for date " + start_date_str + " to " + end_date_str)
- 
-    activity_others_list = ["distance", "calories", "steps"]
-    for activity_type in activity_others_list:
-        activity_others_data_list = fitbit_client.activity_series(activity_type, start_date_str, end_date_str).get("activities-tracker-"+activity_type)
-        if activity_others_data_list != None:
-            for data in activity_others_data_list:
-                log_time = datetime.fromisoformat(data["dateTime"] + "T" + "00:00:00")
-                utc_time = LOCAL_TIMEZONE.localize(log_time).astimezone(pytz.utc).isoformat()
-                activity_name = "Total Steps" if activity_type == "steps" else activity_type
-                collected_records.append({
-                        "measurement": activity_name,
-                        "time": utc_time,
-                        "tags": {
-                            "Device": DEVICENAME
-                        },
-                        "fields": {
-                            "value" : float(data["value"])
-                        }
-                    })
-            logging.info("Recorded " + activity_name + " for date " + start_date_str + " to " + end_date_str)
-        else:
-            logging.error("Recording failed : " + activity_name + " for date " + start_date_str + " to " + end_date_str)
- 
-    HR_zones_data_list = fitbit_client.heart_summary(start_date_str, end_date_str).get("activities-heart")
-    if HR_zones_data_list != None:
-        for data in HR_zones_data_list:
-            log_time = datetime.fromisoformat(data["dateTime"] + "T" + "00:00:00")
-            utc_time = LOCAL_TIMEZONE.localize(log_time).astimezone(pytz.utc).isoformat()
-            collected_records.append({
-                    "measurement": "HR zones",
-                    "time": utc_time,
-                    "tags": {
-                        "Device": DEVICENAME
-                    },
-                    "fields": {
-                        "Normal" : data["value"]["heartRateZones"][0].get("minutes", 0),
-                        "Fat Burn" :  data["value"]["heartRateZones"][1].get("minutes", 0),
-                        "Cardio" :  data["value"]["heartRateZones"][2].get("minutes", 0),
-                        "Peak" :  data["value"]["heartRateZones"][3].get("minutes", 0)
-                    }
-                })
-            if "restingHeartRate" in data["value"]:
-                collected_records.append({
-                            "measurement":  "RestingHR",
-                            "time": utc_time,
-                            "tags": {
-                                "Device": DEVICENAME
-                            },
-                            "fields": {
-                                "value": data["value"]["restingHeartRate"]
-                            }
-                        })
-        logging.info("Recorded RHR and HR zones for date " + start_date_str + " to " + end_date_str)
-    else:
-        logging.error("Recording failed : RHR and HR zones for date " + start_date_str + " to " + end_date_str)
- 
-    HR_zone_minutes_list = fitbit_client.active_zone_minutes(start_date_str, end_date_str).get("activities-active-zone-minutes")
-    if HR_zone_minutes_list != None:
-        for data in HR_zone_minutes_list:
-            log_time = datetime.fromisoformat(data["dateTime"] + "T" + "00:00:00")
-            utc_time = LOCAL_TIMEZONE.localize(log_time).astimezone(pytz.utc).isoformat()
-            if data.get("value"):
-                collected_records.append({
-                        "measurement": "HR zones",
-                        "time": utc_time,
-                        "tags": {
-                            "Device": DEVICENAME
-                        },
-                        "fields": data["value"]
-                    })
-        logging.info("Recorded HR zone minutes for date " + start_date_str + " to " + end_date_str)
-    else:
-        logging.error("Recording failed : HR zone minutes for date " + start_date_str + " to " + end_date_str)
+    provider = google_provider if HEALTH_API_PROVIDER == "google" else fitbit_provider
+    collected_records.extend(point.as_record() for point in provider.fetch_daily_group("365d", start_date_str, end_date_str))
 
 
 def get_daily_data_limit_none(start_date_str, end_date_str):
-    if HEALTH_API_PROVIDER == "google":
-        collected_records.extend(point.as_record() for point in google_provider.fetch_daily_group("none", start_date_str, end_date_str))
-        return
-
-    try:
-        data_list = fitbit_client.spo2(start_date_str, end_date_str)
-    except requests.exceptions.HTTPError as e:
-        logging.error(f"{e}")
-        data_list = None
-    if data_list != None:
-        for data in data_list:
-            log_time = datetime.fromisoformat(data["dateTime"] + "T" + "00:00:00")
-            utc_time = LOCAL_TIMEZONE.localize(log_time).astimezone(pytz.utc).isoformat()
-            collected_records.append({
-                    "measurement":  "SPO2",
-                    "time": utc_time,
-                    "tags": {
-                        "Device": DEVICENAME
-                    },
-                    "fields": {
-                        "avg": float(data["value"]["avg"]) if data["value"]["avg"] else None,
-                        "max": float(data["value"]["max"]) if data["value"]["max"] else None,
-                        "min": float(data["value"]["min"]) if data["value"]["min"] else None
-                    }
-                })
-        logging.info("Recorded Avg SPO2 for date " + start_date_str + " to " + end_date_str)
-    else:
-        logging.error("Recording failed : Avg SPO2 for date " + start_date_str + " to " + end_date_str)
+    provider = google_provider if HEALTH_API_PROVIDER == "google" else fitbit_provider
+    collected_records.extend(point.as_record() for point in provider.fetch_daily_group("none", start_date_str, end_date_str))
 
 
-def get_tcx_data(tcx_url, ActivityID, ActivityName):
-    tcx_headers = {
-        "Authorization": "Bearer " + token_manager.get_access_token(),
-        "Accept": "application/x-www-form-urlencoded"
-    }
-    tcx_params = {
-            'includePartialTCX': 'false'
-        }
-    response = fitbit_client.tcx(tcx_url, headers=tcx_headers, params=tcx_params)
-    if response.status_code != 200:
-        logging.error(f"Error fetching TCX file: {response.status_code}, {response.text}")
-    else:
-        root = ET.fromstring(response.text)
-        namespace = {"ns": "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"}
-        trackpoints = root.findall(".//ns:Trackpoint", namespace)
-        prev_time = None
-        prev_distance = None
-        
-        for i, trkpt in enumerate(trackpoints):
-            time_elem = trkpt.find("ns:Time", namespace)
-            lat = trkpt.find(".//ns:LatitudeDegrees", namespace)
-            lon = trkpt.find(".//ns:LongitudeDegrees", namespace)
-            altitude = trkpt.find("ns:AltitudeMeters", namespace)
-            distance = trkpt.find("ns:DistanceMeters", namespace)
-            heart_rate = trkpt.find(".//ns:HeartRateBpm/ns:Value", namespace)
-
-            if time_elem is not None and lat is not None:
-                current_time = datetime.fromisoformat(time_elem.text.strip("Z"))
-                fields = {
-                    "lat": float(lat.text),
-                    "lon": float(lon.text)
-                }
-                if altitude is not None:
-                    fields["altitude"] = float(altitude.text)
-                if distance is not None:
-                    fields["distance"] = float(distance.text)
-                    current_distance = float(distance.text)
-                else:
-                    current_distance = None
-                if heart_rate is not None:
-                    fields["heart_rate"] = int(heart_rate.text)
-                if i > 0 and prev_time is not None and prev_distance is not None and current_distance is not None:
-                    time_diff = (current_time - prev_time).total_seconds()
-                    distance_diff = current_distance - prev_distance
-                    if time_diff > 0:
-                        speed_mps = distance_diff / time_diff
-                        speed_kph = speed_mps * 3.6
-                        fields["speed_kph"] = speed_kph
-                prev_time = current_time
-                prev_distance = current_distance
-                
-                collected_records.append({
-                        "measurement": "GPS",
-                        "tags": {
-                            "ActivityName": ActivityName
-                        },
-                        "time": datetime.fromisoformat(time_elem.text.strip("Z")).astimezone(pytz.utc).isoformat(),
-                        "fields": {"ActivityId": ActivityID, **fields}
-                    })
 
 
 def fetch_latest_activities(end_date_str):
-    if HEALTH_API_PROVIDER == "google":
-        collected_records.extend(point.as_record() for point in google_provider.fetch_workouts(end_date_str))
-        return
-
-    next_end_date_str = (datetime.strptime(end_date_str, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
-    recent_activities_data = fitbit_client.activities(params={'beforeDate': next_end_date_str, 'sort': 'desc', 'limit': 50, 'offset': 0})
-    TCX_record_count, TCX_record_limit = 0,10
-    if recent_activities_data != None:
-        for activity in recent_activities_data['activities']:
-            fields = {
-                "ActivityId": str(activity["logId"]) if activity.get("logId") is not None else None,
-                "startTime": activity.get("startTime"),
-            }
-            if 'activeDuration' in activity:
-                fields['ActiveDuration'] = int(float(activity['activeDuration']) / 1000)
-            if 'averageHeartRate' in activity:
-                fields['AverageHeartRate'] = int(activity['averageHeartRate'])
-            if 'calories' in activity:
-                fields['calories'] = int(activity['calories'])
-            if 'duration' in activity:
-                fields['duration'] = int(float(activity['duration']) / 1000)
-            if 'distance' in activity:
-                fields['distance'] = float(activity['distance'])
-            if 'steps' in activity:
-                fields['steps'] = int(activity['steps'])
-            starttime = datetime.fromisoformat(activity['startTime'].strip("Z"))
-            utc_time = starttime.astimezone(pytz.utc).isoformat()
-            if activity.get("duration") is not None:
-                fields["endTime"] = (starttime + timedelta(milliseconds=float(activity["duration"]))).isoformat()
-            fields = sanitize_fields(fields)
-            try:
-                extracted_activity_name = activity['activityName']
-            except KeyError as MissingKeyError:
-                extracted_activity_name = "Unknown-Activity"
-            ActivityID = fields.get("ActivityId") or (utc_time + "-" + extracted_activity_name)
-            fields["ActivityId"] = ActivityID
-            collected_records.append({
-                "measurement": "Activity Records",
-                "time": utc_time,
-                "tags": {
-                    "ActivityName": extracted_activity_name
-                },
-                "fields": fields
-            })
-            if activity.get("hasGps", False):
-                tcx_link = activity.get("tcxLink", False)
-                if tcx_link and TCX_record_count <= TCX_record_limit:
-                    TCX_record_count += 1
-                    try:
-                        get_tcx_data(tcx_link, ActivityID, extracted_activity_name)
-                        logging.info("Recorded TCX GPS data for " + tcx_link)
-                    except Exception as tcx_exception:
-                        logging.error("Failed to get GPS Data for " + tcx_link + " : " + str(tcx_exception))
-        logging.info("Fetched 50 recent activities before date " + end_date_str)
-    else:
-        logging.error("Fetching 50 recent activities failed : before date " + end_date_str)
+    provider = google_provider if HEALTH_API_PROVIDER == "google" else fitbit_provider
+    collected_records.extend(point.as_record() for point in provider.fetch_workouts(end_date_str))
 
 
 def main():
     """Run the legacy worker explicitly; importing this module is safe."""
-    global google_provider, fitbit_client, google_client, transport, token_manager, repository, AUTO_DATE_RANGE, DEVICENAME, DEVICE_ID, DEVICE_METADATA_STATE_PATH, DRY_RUN_MODE, EXPIRED_TOKEN_MAX_RETRY, FITBIT_API_BASE_URL, FITBIT_LANGUAGE, FITBIT_LOG_FILE_PATH, GOOGLE_DEVICE_METADATA, GOOGLE_HEALTH_API_VERSION, GOOGLE_HEALTH_BASE_URL, GOOGLE_OAUTH_TOKEN_URL, HEALTH_API_PROVIDER, INFLUXDB_BUCKET, INFLUXDB_DATABASE, INFLUXDB_HOST, INFLUXDB_ORG, INFLUXDB_PASSWORD, INFLUXDB_PORT, INFLUXDB_TOKEN, INFLUXDB_URL, INFLUXDB_USERNAME, INFLUXDB_V3_ACCESS_TOKEN, INFLUXDB_VERSION, LOCAL_TIMEZONE, LOG_LEVEL, LOG_LEVEL_NAME, MANUAL_END_DATE, MANUAL_START_DATE, OVERWRITE_LOG_FILE, PENDING_DEVICE_METADATA_SIGNATURE, REQUEST_MAX_RETRIES, REQUEST_TIMEOUT_SECONDS, SCHEDULE_AUTO_UPDATE, SERVER_ERROR_MAX_RETRY, SKIP_REQUEST_ON_SERVER_ERROR, TOKEN_FILE_PATH, USER_ID, auto_update_date_range, client_id, client_secret, collected_records, date_list, date_range, date_str, demo_point, discovered_device_name, end_date, end_date_str, end_index, google_client_id, google_client_secret, i, influxdb_write_api, influxdbclient, single_day, start_date, start_date_str, start_index
+    global fitbit_provider, google_provider, fitbit_client, google_client, transport, token_manager, repository, AUTO_DATE_RANGE, DEVICENAME, DEVICE_ID, DEVICE_METADATA_STATE_PATH, DRY_RUN_MODE, EXPIRED_TOKEN_MAX_RETRY, FITBIT_API_BASE_URL, FITBIT_LANGUAGE, FITBIT_LOG_FILE_PATH, GOOGLE_DEVICE_METADATA, GOOGLE_HEALTH_API_VERSION, GOOGLE_HEALTH_BASE_URL, GOOGLE_OAUTH_TOKEN_URL, HEALTH_API_PROVIDER, INFLUXDB_BUCKET, INFLUXDB_DATABASE, INFLUXDB_HOST, INFLUXDB_ORG, INFLUXDB_PASSWORD, INFLUXDB_PORT, INFLUXDB_TOKEN, INFLUXDB_URL, INFLUXDB_USERNAME, INFLUXDB_V3_ACCESS_TOKEN, INFLUXDB_VERSION, LOCAL_TIMEZONE, LOG_LEVEL, LOG_LEVEL_NAME, MANUAL_END_DATE, MANUAL_START_DATE, OVERWRITE_LOG_FILE, PENDING_DEVICE_METADATA_SIGNATURE, REQUEST_MAX_RETRIES, REQUEST_TIMEOUT_SECONDS, SCHEDULE_AUTO_UPDATE, SERVER_ERROR_MAX_RETRY, SKIP_REQUEST_ON_SERVER_ERROR, TOKEN_FILE_PATH, USER_ID, auto_update_date_range, client_id, client_secret, collected_records, date_list, date_range, date_str, demo_point, discovered_device_name, end_date, end_date_str, end_index, google_client_id, google_client_secret, i, influxdb_write_api, influxdbclient, single_day, start_date, start_date_str, start_index
     settings = WorkerSettings.from_env()
     FITBIT_LOG_FILE_PATH = settings.fitbit_log_file_path
     TOKEN_FILE_PATH = settings.token_file_path
@@ -794,6 +318,7 @@ def main():
             logging.info("Could not auto-detect device displayName from Google Health API; keeping default '%s'", DEVICENAME)
 
     google_provider = GoogleHealthProvider(settings, google_client, LOCAL_TIMEZONE, DEVICENAME)
+    fitbit_provider = FitbitProvider(settings, fitbit_client, LOCAL_TIMEZONE, DEVICENAME)
 
     if AUTO_DATE_RANGE:
         end_date = datetime.now(LOCAL_TIMEZONE)
