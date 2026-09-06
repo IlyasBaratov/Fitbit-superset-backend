@@ -39,3 +39,22 @@ def test_provider_mismatch(token_settings):
     with pytest.raises(AuthenticationError, match="provider"):
         FitbitTokenManager(token_settings, session).refresh()
     session.post.assert_not_called()
+
+
+def test_google_retains_refresh_token_and_sanitizes_errors(token_settings):
+    from pathlib import Path
+    from app.providers.google_health.auth import GoogleTokenManager
+    path = Path(token_settings.token_file_path)
+    path.write_text(json.dumps({"provider": "google", "refresh_token": "original-secret"}))
+    session = Mock()
+    session.post.return_value.status_code = 200
+    session.post.return_value.json.return_value = {"access_token": "new-access"}
+    manager = GoogleTokenManager(token_settings, session)
+    assert manager.refresh() == "new-access"
+    assert json.loads(path.read_text())["refresh_token"] == "original-secret"
+    session.post.return_value.status_code = 400
+    session.post.return_value.text = "original-secret"
+    with pytest.raises(AuthenticationError) as error:
+        manager.refresh()
+    assert "original-secret" not in str(error.value)
+    assert json.loads(path.read_text())["access_token"] == "new-access"

@@ -1,3 +1,4 @@
+from app.providers.google_health.auth import GoogleTokenManager
 from app.providers.fitbit.auth import FitbitTokenManager
 from app.storage.influx.repository import InfluxHealthRepository
 from app.domain.models import HealthPoint
@@ -410,70 +411,8 @@ def request_data_from_fitbit(url, headers=None, params=None, data=None, request_
     raise RuntimeError("Provider request retry loop exhausted")
 
 
-def save_tokens_to_file(access_token, refresh_token, provider, expires_in=None):
-    tokens = {
-        "provider": provider,
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "saved_at_utc": datetime.now(timezone.utc).isoformat()
-    }
-    if expires_in is not None:
-        tokens["expires_in"] = int(expires_in)
-    with open(TOKEN_FILE_PATH, "w") as file:
-        json.dump(tokens, file)
-
-
-def refresh_google_tokens(client_id, client_secret, refresh_token):
-    logging.info("Attempting to refresh Google Health API tokens...")
-    data = {
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "grant_type": "refresh_token",
-        "refresh_token": refresh_token
-    }
-    response = requests.post(GOOGLE_OAUTH_TOKEN_URL, data=data, timeout=REQUEST_TIMEOUT_SECONDS)
-    if response.status_code != 200:
-        logging.error("Google token refresh failed with HTTP %s", response.status_code)
-        response.raise_for_status()
-
-    json_data = response.json()
-    access_token = json_data["access_token"]
-    new_refresh_token = json_data.get("refresh_token", refresh_token)
-    save_tokens_to_file(access_token, new_refresh_token, "google", json_data.get("expires_in"))
-    logging.info("Google token refresh successful!")
-    return access_token, new_refresh_token
-
-
-def load_tokens_from_file():
-    with open(TOKEN_FILE_PATH, "r") as file:
-        tokens = json.load(file)
-        provider = (tokens.get("provider") or "fitbit").lower()
-        return tokens.get("access_token"), tokens.get("refresh_token"), provider
-
-
-def get_active_credentials(client_id, client_secret):
-    if HEALTH_API_PROVIDER == "google":
-        return google_client_id, google_client_secret
-    return client_id, client_secret
-
-
 def Get_New_Access_Token(client_id, client_secret):
-    if HEALTH_API_PROVIDER == "fitbit":
-        return token_manager.refresh()
-    active_client_id, active_client_secret = get_active_credentials(client_id, client_secret)
-    try:
-        access_token, refresh_token, provider_in_file = load_tokens_from_file()
-        if provider_in_file != HEALTH_API_PROVIDER:
-            logging.warning("Token file provider '%s' does not match HEALTH_API_PROVIDER '%s'.", provider_in_file, HEALTH_API_PROVIDER)
-    except FileNotFoundError:
-        refresh_token = input(f"No token file found. Please enter a valid {HEALTH_API_PROVIDER} refresh token : ")
-
-    if HEALTH_API_PROVIDER == "google":
-        access_token, refresh_token = refresh_google_tokens(active_client_id, active_client_secret, refresh_token)
-    else:
-        raise ValueError(f"Unsupported provider: {HEALTH_API_PROVIDER}")
-
-    return access_token
+    return token_manager.refresh()
 
 
 def get_common_tags():
@@ -1804,7 +1743,7 @@ def main():
                       secrets=(client_secret, google_client_secret, INFLUXDB_PASSWORD, INFLUXDB_TOKEN, INFLUXDB_V3_ACCESS_TOKEN),
                       overwrite=OVERWRITE_LOG_FILE)
 
-    token_manager = FitbitTokenManager(settings) if HEALTH_API_PROVIDER == "fitbit" else None
+    token_manager = FitbitTokenManager(settings) if HEALTH_API_PROVIDER == "fitbit" else GoogleTokenManager(settings)
     ACCESS_TOKEN = Get_New_Access_Token(client_id, client_secret)
 
     repository = InfluxHealthRepository(settings, build_common_tags(USER_ID, HEALTH_API_PROVIDER, DEVICENAME, DEVICE_ID), "UTC")
