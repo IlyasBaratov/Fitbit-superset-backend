@@ -1,14 +1,11 @@
+from app.storage.influx.repository import InfluxHealthRepository
+from app.domain.models import HealthPoint
 from app.core.logging import configure_logging
 from app.core.config import WorkerSettings
 import base64, requests, schedule, time, json, pytz, logging, os, sys
 from dotenv import load_dotenv
 from requests.exceptions import ConnectionError
 from datetime import datetime, timedelta, timezone
-from influxdb import InfluxDBClient
-from influxdb.exceptions import InfluxDBClientError
-from influxdb_client import InfluxDBClient as InfluxDBClient2
-from influxdb_client.client.write_api import SYNCHRONOUS
-from influxdb_client_3 import InfluxDBClient3, InfluxDBError
 import xml.etree.ElementTree as ET
 from health_schema import (
     FIELD_TYPES,
@@ -502,32 +499,6 @@ def Get_New_Access_Token(client_id, client_secret):
     return access_token
 
 
-def detect_influx_field_type_compatibility():
-    if DRY_RUN_MODE or INFLUXDB_VERSION != "1":
-        return
-    for measurement in ("RestingHR", "Total Steps"):
-        try:
-            result = influxdbclient.query(f'SHOW FIELD KEYS FROM "{measurement}"')
-            rows = list(result.get_points(measurement=measurement))
-        except InfluxDBClientError as error:
-            logging.warning("Could not inspect field types for %s: %s", measurement, error)
-            continue
-        value_row = next((row for row in rows if row.get("fieldKey") == "value"), None)
-        if not value_row:
-            continue
-        existing_type = value_row.get("fieldType")
-        if existing_type == "float":
-            FIELD_TYPES[measurement]["value"] = float
-            logging.warning(
-                "InfluxDB migration required for %s.value: historical type is float; preserving float to avoid mixed-field writes",
-                measurement,
-            )
-        elif existing_type == "integer":
-            FIELD_TYPES[measurement]["value"] = int
-        else:
-            logging.error("Unsupported existing field type for %s.value: %s", measurement, existing_type)
-
-
 def get_common_tags():
     return build_common_tags(USER_ID, HEALTH_API_PROVIDER, DEVICENAME, DEVICE_ID)
 
@@ -543,46 +514,10 @@ def persist_device_metadata_signature():
 
 
 def write_points_to_influxdb(points):
-    timezone_name = getattr(LOCAL_TIMEZONE, "zone", str(LOCAL_TIMEZONE))
-    prepared_points = prepare_points(points, get_common_tags(), timezone_name)
-    skipped_count = len(points) - len(prepared_points)
-    if skipped_count:
-        logging.warning("Skipped %s invalid or empty InfluxDB points", skipped_count)
-    if not prepared_points:
-        logging.warning("No valid InfluxDB points to write")
-        return
-
-    if DRY_RUN_MODE:
-        logging.info("DRY_RUN_MODE: Skipping InfluxDB write for %s validated points", len(prepared_points))
-        return
-
-    if INFLUXDB_VERSION == "2":
-        try:
-            influxdb_write_api.write(bucket=INFLUXDB_BUCKET, org=INFLUXDB_ORG, record=prepared_points)
-            persist_device_metadata_signature()
-            logging.info("Successfully wrote %s points to InfluxDB", len(prepared_points))
-        except InfluxDBError as err:
-            logging.error("Unable to connect with influxdb 2.x database! " + str(err))
-            print("Influxdb connection failed! ", str(err))
-    elif INFLUXDB_VERSION == "1":
-        try:
-            influxdbclient.write_points(prepared_points)
-            persist_device_metadata_signature()
-            logging.info("Successfully wrote %s points to InfluxDB", len(prepared_points))
-        except InfluxDBClientError as err:
-            logging.error("Unable to connect with influxdb 1.x database! " + str(err))
-            print("Influxdb connection failed! ", str(err))
-    elif INFLUXDB_VERSION == "3":
-        try:
-            influxdbclient.write(record=prepared_points)
-            persist_device_metadata_signature()
-            logging.info("Successfully wrote %s points to InfluxDB", len(prepared_points))
-        except InfluxDBError as err:
-            logging.error("Unable to connect with influxdb 3.x database! " + str(err))
-            print("Influxdb connection failed! ", str(err))
-    else:
-        logging.error("No matching version found. Supported values are 1 and 2 and 3")
-        raise InfluxDBClientError("No matching version found. Supported values are 1 and 2 and 3")
+    repository.common_tags = get_common_tags()
+    repository.timezone = getattr(LOCAL_TIMEZONE, "zone", str(LOCAL_TIMEZONE))
+    if repository.write([HealthPoint.from_record(point) for point in points]):
+        persist_device_metadata_signature()
 
 
 def get_user_timezone_name():
@@ -1842,7 +1777,7 @@ def fetch_latest_activities(end_date_str):
 
 def main():
     """Run the legacy worker explicitly; importing this module is safe."""
-    global ACCESS_TOKEN, AUTO_DATE_RANGE, DEVICENAME, DEVICE_ID, DEVICE_METADATA_STATE_PATH, DRY_RUN_MODE, EXPIRED_TOKEN_MAX_RETRY, FITBIT_API_BASE_URL, FITBIT_LANGUAGE, FITBIT_LOG_FILE_PATH, GOOGLE_DEVICE_METADATA, GOOGLE_HEALTH_API_VERSION, GOOGLE_HEALTH_BASE_URL, GOOGLE_OAUTH_TOKEN_URL, HEALTH_API_PROVIDER, INFLUXDB_BUCKET, INFLUXDB_DATABASE, INFLUXDB_HOST, INFLUXDB_ORG, INFLUXDB_PASSWORD, INFLUXDB_PORT, INFLUXDB_TOKEN, INFLUXDB_URL, INFLUXDB_USERNAME, INFLUXDB_V3_ACCESS_TOKEN, INFLUXDB_VERSION, LOCAL_TIMEZONE, LOG_LEVEL, LOG_LEVEL_NAME, MANUAL_END_DATE, MANUAL_START_DATE, OVERWRITE_LOG_FILE, PENDING_DEVICE_METADATA_SIGNATURE, REQUEST_MAX_RETRIES, REQUEST_TIMEOUT_SECONDS, SCHEDULE_AUTO_UPDATE, SERVER_ERROR_MAX_RETRY, SKIP_REQUEST_ON_SERVER_ERROR, TOKEN_FILE_PATH, USER_ID, auto_update_date_range, client_id, client_secret, collected_records, date_list, date_range, date_str, demo_point, discovered_device_name, end_date, end_date_str, end_index, google_client_id, google_client_secret, i, influxdb_write_api, influxdbclient, single_day, start_date, start_date_str, start_index
+    global repository, ACCESS_TOKEN, AUTO_DATE_RANGE, DEVICENAME, DEVICE_ID, DEVICE_METADATA_STATE_PATH, DRY_RUN_MODE, EXPIRED_TOKEN_MAX_RETRY, FITBIT_API_BASE_URL, FITBIT_LANGUAGE, FITBIT_LOG_FILE_PATH, GOOGLE_DEVICE_METADATA, GOOGLE_HEALTH_API_VERSION, GOOGLE_HEALTH_BASE_URL, GOOGLE_OAUTH_TOKEN_URL, HEALTH_API_PROVIDER, INFLUXDB_BUCKET, INFLUXDB_DATABASE, INFLUXDB_HOST, INFLUXDB_ORG, INFLUXDB_PASSWORD, INFLUXDB_PORT, INFLUXDB_TOKEN, INFLUXDB_URL, INFLUXDB_USERNAME, INFLUXDB_V3_ACCESS_TOKEN, INFLUXDB_VERSION, LOCAL_TIMEZONE, LOG_LEVEL, LOG_LEVEL_NAME, MANUAL_END_DATE, MANUAL_START_DATE, OVERWRITE_LOG_FILE, PENDING_DEVICE_METADATA_SIGNATURE, REQUEST_MAX_RETRIES, REQUEST_TIMEOUT_SECONDS, SCHEDULE_AUTO_UPDATE, SERVER_ERROR_MAX_RETRY, SKIP_REQUEST_ON_SERVER_ERROR, TOKEN_FILE_PATH, USER_ID, auto_update_date_range, client_id, client_secret, collected_records, date_list, date_range, date_str, demo_point, discovered_device_name, end_date, end_date_str, end_index, google_client_id, google_client_secret, i, influxdb_write_api, influxdbclient, single_day, start_date, start_date_str, start_index
     settings = WorkerSettings.from_env()
     FITBIT_LOG_FILE_PATH = settings.fitbit_log_file_path
     TOKEN_FILE_PATH = settings.token_file_path
@@ -1894,47 +1829,7 @@ def main():
 
     ACCESS_TOKEN = Get_New_Access_Token(client_id, client_secret)
 
-    if DRY_RUN_MODE:
-        influxdbclient = None
-        influxdb_write_api = None
-        logging.warning("DRY_RUN_MODE is enabled. InfluxDB initialization and writes are skipped.")
-    elif INFLUXDB_VERSION == "2":
-        try:
-            influxdbclient = InfluxDBClient2(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
-            influxdb_write_api = influxdbclient.write_api(write_options=SYNCHRONOUS)
-        except InfluxDBError as err:
-            logging.error("Unable to connect with influxdb 2.x database! Aborted")
-            raise InfluxDBError("InfluxDB connection failed:" + str(err))
-    elif INFLUXDB_VERSION == "1":
-        try:
-            influxdbclient = InfluxDBClient(host=INFLUXDB_HOST, port=INFLUXDB_PORT, username=INFLUXDB_USERNAME, password=INFLUXDB_PASSWORD)
-            influxdbclient.switch_database(INFLUXDB_DATABASE)
-        except InfluxDBClientError as err:
-            logging.error("Unable to connect with influxdb 1.x database! Aborted")
-            raise InfluxDBClientError("InfluxDB connection failed:" + str(err))
-    elif INFLUXDB_VERSION == "3":
-        try:
-            influxdbclient = InfluxDBClient3(
-                    host=f"http://{INFLUXDB_HOST}:{INFLUXDB_PORT}",
-                    token=INFLUXDB_V3_ACCESS_TOKEN,
-                    database=INFLUXDB_DATABASE
-                    )
-            demo_point = {
-            'measurement': 'DemoPoint',
-            'time': '1970-01-01T00:00:00+00:00',
-            'tags': {'DemoTag': 'DemoTagValue'},
-            'fields': {'DemoField': 0}
-            }
-            # The following code block tests the connection by writing/overwriting a demo point. raises error and aborts if connection fails. 
-            influxdbclient.write(record=[demo_point])
-        except InfluxDBError as err:
-            logging.error("Unable to connect with influxdb 3.x database! Aborted")
-            raise InfluxDBClientError("InfluxDB connection failed:" + str(err))
-    else:
-        logging.error("No matching version found. Supported values are 1 and 2 and 3")
-        raise InfluxDBClientError("No matching version found. Supported values are 1 and 2 and 3")
-
-    detect_influx_field_type_compatibility()
+    repository = InfluxHealthRepository(settings, build_common_tags(USER_ID, HEALTH_API_PROVIDER, DEVICENAME, DEVICE_ID), "UTC")
 
     PENDING_DEVICE_METADATA_SIGNATURE = None
 
