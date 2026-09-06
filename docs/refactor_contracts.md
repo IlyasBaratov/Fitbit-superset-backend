@@ -9,3 +9,10 @@ Google filtering falls back from server filters to paginated local-date filterin
 Existing API: GET /health, POST /api/ai/{analyze,ask,sleep,activity,workouts,recovery,test}. Preserve strict models, bearer authentication, errors, Gemini structured output/grounding, retries/fallback and cache. Query identity is server controlled.
 
 Baseline: 84 tests. Worker Python 3.10.20; API/local Python 3.14.6. Compose uses ai-api, fitbit-fetch-data, influxdb 1.11 and grafana with persistent host directories. No live deployment or dependency upgrade.
+
+
+## Mapping parity fixtures
+
+Synthetic payloads in `tests/fixtures/{fitbit,google}_mapping_contract.json` include expected normalized points captured by executing only the original function definitions from commit f8999cc, with all HTTP calls replaced by fixtures. Fitbit covers 25 points across 20 measurements; Google covers 20 points across 19 measurements. Device metadata is covered separately by acknowledgement and discovery tests. The extracted providers must produce identical normalized points for these inputs.
+
+The final audit also fixes the inherited Fitbit empty-activity response failure: a missing or empty daily activity result no longer refers to an uninitialized measurement name.

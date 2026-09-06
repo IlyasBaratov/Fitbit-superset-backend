@@ -21,12 +21,12 @@ def map_activity(payloads, start_date_str, end_date_str, device_name, local_time
             logger.error('Recording failed : ' + activity_type + ' for date ' + start_date_str + ' to ' + end_date_str)
     activity_others_list = ['distance', 'calories', 'steps']
     for activity_type in activity_others_list:
+        activity_name = 'Total Steps' if activity_type == 'steps' else activity_type
         activity_others_data_list = payloads.get('activity_series:' + activity_type, {}).get('activities-tracker-' + activity_type)
         if activity_others_data_list != None:
             for data in activity_others_data_list:
                 log_time = datetime.fromisoformat(data['dateTime'] + 'T' + '00:00:00')
                 utc_time = local_timezone.localize(log_time).astimezone(pytz.utc).isoformat()
-                activity_name = 'Total Steps' if activity_type == 'steps' else activity_type
                 records.append({'measurement': activity_name, 'time': utc_time, 'tags': {'Device': device_name}, 'fields': {'value': float(data['value'])}})
             logger.info('Recorded ' + activity_name + ' for date ' + start_date_str + ' to ' + end_date_str)
         else:

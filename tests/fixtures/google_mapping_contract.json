@@ -1,0 +1,544 @@
+{
+  "source_commit": "f8999cc",
+  "date": "2026-08-20",
+  "payloads": {
+    "range": {
+      "heart-rate": [
+        [
+          {
+            "heartRate": {
+              "beatsPerMinute": 60
+            }
+          },
+          "2026-08-20T12:00:00+00:00"
+        ]
+      ],
+      "steps": [
+        [
+          {
+            "steps": {
+              "count": 100
+            }
+          },
+          "2026-08-20T12:00:00+00:00"
+        ]
+      ],
+      "daily-heart-rate-variability": [
+        [
+          {
+            "dailyHeartRateVariability": {
+              "averageHeartRateVariabilityMilliseconds": 40,
+              "deepSleepRootMeanSquareOfSuccessiveDifferencesMilliseconds": 50,
+              "nonRemHeartRateBeatsPerMinute": 55,
+              "entropy": 2
+            }
+          },
+          "2026-08-20T12:00:00+00:00"
+        ]
+      ],
+      "daily-respiratory-rate": [
+        [
+          {
+            "dailyRespiratoryRate": {
+              "breathsPerMinute": 16
+            }
+          },
+          "2026-08-20T12:00:00+00:00"
+        ]
+      ],
+      "daily-sleep-temperature-derivations": [
+        [
+          {
+            "dailySleepTemperatureDerivations": {
+              "nightlyTemperatureCelsius": 35,
+              "baselineTemperatureCelsius": 34,
+              "relativeNightlyStddev30dCelsius": 0.2
+            }
+          },
+          "2026-08-20T12:00:00+00:00"
+        ]
+      ],
+      "oxygen-saturation": [
+        [
+          {
+            "oxygenSaturation": {
+              "percentage": 98
+            }
+          },
+          "2026-08-20T12:00:00+00:00"
+        ]
+      ],
+      "weight": [
+        [
+          {
+            "weight": {
+              "sampleTime": {
+                "physicalTime": "2026-08-20T12:00:00+00:00"
+              },
+              "weightGrams": 80000
+            }
+          },
+          "2026-08-20T12:00:00+00:00"
+        ]
+      ],
+      "daily-resting-heart-rate": [
+        [
+          {
+            "dailyRestingHeartRate": {
+              "beatsPerMinute": 55
+            }
+          },
+          "2026-08-20T12:00:00+00:00"
+        ]
+      ],
+      "daily-oxygen-saturation": [
+        [
+          {
+            "dailyOxygenSaturation": {
+              "averagePercentage": 97,
+              "upperBoundPercentage": 99,
+              "lowerBoundPercentage": 95
+            }
+          },
+          "2026-08-20T12:00:00+00:00"
+        ]
+      ],
+      "sleep": [
+        [
+          {
+            "name": "users/1/dataTypes/sleep/dataPoints/sleep-1",
+            "sleep": {
+              "interval": {
+                "startTime": "2026-08-20T00:00:00+00:00",
+                "endTime": "2026-08-20T08:00:00+00:00"
+              },
+              "summary": {
+                "minutesAsleep": "420",
+                "minutesAwake": "60",
+                "minutesInSleepPeriod": "480",
+                "minutesAfterWakeUp": "0",
+                "minutesToFallAsleep": "10",
+                "stagesSummary": [
+                  {
+                    "type": "LIGHT",
+                    "minutes": "240"
+                  },
+                  {
+                    "type": "REM",
+                    "minutes": "120"
+                  },
+                  {
+                    "type": "DEEP",
+                    "minutes": "60"
+                  }
+                ]
+              },
+              "stages": [
+                {
+                  "startTime": "2026-08-20T00:00:00+00:00",
+                  "endTime": "2026-08-20T00:01:00+00:00",
+                  "type": "DEEP"
+                }
+              ]
+            }
+          },
+          "2026-08-20T12:00:00+00:00"
+        ]
+      ]
+    },
+    "list": {
+      "height": {
+        "dataPoints": [
+          {
+            "height": {
+              "sampleTime": {
+                "physicalTime": "2026-08-20T00:00:00+00:00"
+              },
+              "heightMillimeters": 1840
+            }
+          }
+        ]
+      },
+      "exercise": {
+        "dataPoints": [
+          {
+            "name": "users/1/dataTypes/exercise/dataPoints/walk-1",
+            "exercise": {
+              "displayName": "Walk",
+              "activeDuration": "60s",
+              "interval": {
+                "startTime": "2026-08-20T12:00:00+00:00",
+                "endTime": "2026-08-20T12:01:00+00:00"
+              },
+              "metricsSummary": {
+                "distanceMeters": 100,
+                "steps": 150,
+                "caloriesKcal": 10,
+                "averageHeartRateBeatsPerMinute": 120
+              }
+            }
+          }
+        ]
+      }
+    },
+    "rollup": {
+      "active-zone-minutes": {
+        "rollupDataPoints": [
+          {
+            "activeZoneMinutes": {
+              "sumInFatBurnHeartZone": 10,
+              "sumInCardioHeartZone": 5,
+              "sumInPeakHeartZone": 2,
+              "totalActiveZoneMinutes": 24
+            }
+          }
+        ]
+      },
+      "steps": {
+        "rollupDataPoints": [
+          {
+            "steps": {
+              "countSum": 1000
+            }
+          }
+        ]
+      },
+      "total-calories": {
+        "rollupDataPoints": [
+          {
+            "totalCalories": {
+              "kcalSum": 2000
+            }
+          }
+        ]
+      },
+      "distance": {
+        "rollupDataPoints": [
+          {
+            "distance": {
+              "millimetersSum": 1500000
+            }
+          }
+        ]
+      },
+      "sedentary-period": {
+        "rollupDataPoints": [
+          {
+            "sedentaryPeriod": {
+              "durationSum": "3600s"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "expected": [
+    {
+      "measurement": "HeartRate_Intraday",
+      "time": "2026-08-20T12:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "google",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 60
+      }
+    },
+    {
+      "measurement": "Steps_Intraday",
+      "time": "2026-08-20T12:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "google",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 100
+      }
+    },
+    {
+      "measurement": "HRV",
+      "time": "2026-08-20T12:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "google",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "dailyRmssd": 40.0,
+        "deepRmssd": 50.0,
+        "nonRemHeartRateBpm": 55.0,
+        "entropy": 2.0
+      }
+    },
+    {
+      "measurement": "BreathingRate",
+      "time": "2026-08-20T12:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "google",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 16.0
+      }
+    },
+    {
+      "measurement": "Skin Temperature Variation",
+      "time": "2026-08-20T12:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "google",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "RelativeValue": 1.0,
+        "stddev30d": 0.2,
+        "nightlyTemperatureCelsius": 35.0,
+        "baselineTemperatureCelsius": 34.0
+      }
+    },
+    {
+      "measurement": "SPO2_Intraday",
+      "time": "2026-08-20T12:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "google",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 98.0
+      }
+    },
+    {
+      "measurement": "height",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "UserId": "u",
+        "Provider": "google",
+        "Device": "Watch",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 184.0,
+        "heightCm": 184.0,
+        "heightMeters": 1.84,
+        "heightMillimeters": 1840
+      }
+    },
+    {
+      "measurement": "weight",
+      "time": "2026-08-20T12:00:00+00:00",
+      "tags": {
+        "UserId": "u",
+        "Provider": "google",
+        "Device": "Watch",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 80.0,
+        "weightKg": 80.0,
+        "weightLbs": 176.369809744
+      }
+    },
+    {
+      "measurement": "bmi",
+      "time": "2026-08-20T12:00:00+00:00",
+      "tags": {
+        "UserId": "u",
+        "Provider": "google",
+        "Device": "Watch",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 23.63,
+        "weightKg": 80.0,
+        "heightMeters": 1.84,
+        "isCalculated": true
+      }
+    },
+    {
+      "measurement": "Sleep Summary",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "isMainSleep": "true",
+        "UserId": "u",
+        "Provider": "google",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "SleepSessionId": "sleep-1",
+        "efficiency": 88,
+        "minutesAfterWakeup": 0,
+        "minutesAsleep": 420,
+        "minutesToFallAsleep": 10,
+        "minutesInBed": 480,
+        "minutesAwake": 60,
+        "minutesLight": 240,
+        "minutesREM": 120,
+        "minutesDeep": 60,
+        "startTime": "2026-08-20T00:00:00+00:00",
+        "endTime": "2026-08-20T08:00:00+00:00"
+      }
+    },
+    {
+      "measurement": "Sleep Levels",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "isMainSleep": "true",
+        "UserId": "u",
+        "Provider": "google",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "SleepSessionId": "sleep-1",
+        "level": 0,
+        "stageName": "deep",
+        "duration_seconds": 60
+      }
+    },
+    {
+      "measurement": "Sleep Levels",
+      "time": "2026-08-20T08:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "isMainSleep": "true",
+        "UserId": "u",
+        "Provider": "google",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "SleepSessionId": "sleep-1",
+        "level": 3,
+        "stageName": "awake"
+      }
+    },
+    {
+      "measurement": "RestingHR",
+      "time": "2026-08-20T12:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "google",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 55.0
+      }
+    },
+    {
+      "measurement": "HR zones",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "google",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "Fat Burn": 10,
+        "Cardio": 5,
+        "Peak": 2,
+        "TotalActiveZoneMinutes": 24
+      }
+    },
+    {
+      "measurement": "Total Steps",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "google",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 1000.0
+      }
+    },
+    {
+      "measurement": "calories",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "google",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 2000.0
+      }
+    },
+    {
+      "measurement": "distance",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "google",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 1.5
+      }
+    },
+    {
+      "measurement": "Activity Minutes",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "google",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "minutesSedentary": 60
+      }
+    },
+    {
+      "measurement": "SPO2",
+      "time": "2026-08-20T12:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "google",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "avg": 97.0,
+        "max": 99.0,
+        "min": 95.0
+      }
+    },
+    {
+      "measurement": "Activity Records",
+      "time": "2026-08-20T12:00:00+00:00",
+      "tags": {
+        "ActivityName": "Walk",
+        "UserId": "u",
+        "Provider": "google",
+        "Device": "Watch",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "ActivityId": "walk-1",
+        "ActiveDuration": 60,
+        "duration": 60,
+        "AverageHeartRate": 120,
+        "calories": 10,
+        "distance": 0.1,
+        "steps": 150,
+        "startTime": "2026-08-20T12:00:00+00:00",
+        "endTime": "2026-08-20T12:01:00+00:00"
+      }
+    }
+  ]
+}

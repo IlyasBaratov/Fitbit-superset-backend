@@ -1,0 +1,605 @@
+{
+  "source_commit": "f8999cc",
+  "date": "2026-08-20",
+  "payloads": {
+    "hrv": {
+      "hrv": [
+        {
+          "dateTime": "2026-08-20",
+          "value": {
+            "dailyRmssd": 40,
+            "deepRmssd": 50
+          }
+        }
+      ]
+    },
+    "breathing": {
+      "br": [
+        {
+          "dateTime": "2026-08-20",
+          "value": {
+            "breathingRate": 16
+          }
+        }
+      ]
+    },
+    "skin_temperature": {
+      "tempSkin": [
+        {
+          "dateTime": "2026-08-20",
+          "value": {
+            "nightlyRelative": 0.5
+          }
+        }
+      ]
+    },
+    "spo2_intraday": [
+      {
+        "minutes": [
+          {
+            "minute": "2026-08-20T10:00:00",
+            "value": 98
+          }
+        ]
+      }
+    ],
+    "weight": {
+      "weight": [
+        {
+          "date": "2026-08-20",
+          "time": "10:00:00",
+          "weight": 80,
+          "bmi": 23.63
+        }
+      ]
+    },
+    "sleep": {
+      "sleep": [
+        {
+          "logId": 123,
+          "startTime": "2026-08-20T00:00:00",
+          "endTime": "2026-08-20T08:00:00",
+          "isMainSleep": true,
+          "efficiency": 90,
+          "minutesAfterWakeup": 0,
+          "minutesAsleep": 420,
+          "minutesToFallAsleep": 10,
+          "timeInBed": 480,
+          "minutesAwake": 60,
+          "levels": {
+            "summary": {
+              "light": {
+                "minutes": 240
+              },
+              "rem": {
+                "minutes": 120
+              },
+              "deep": {
+                "minutes": 60
+              }
+            },
+            "data": [
+              {
+                "dateTime": "2026-08-20T00:00:00",
+                "level": "deep",
+                "seconds": 60
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "heart_summary": {
+      "activities-heart": [
+        {
+          "dateTime": "2026-08-20",
+          "value": {
+            "heartRateZones": [
+              {
+                "minutes": 10
+              },
+              {
+                "minutes": 20
+              },
+              {
+                "minutes": 30
+              },
+              {
+                "minutes": 40
+              }
+            ],
+            "restingHeartRate": 55
+          }
+        }
+      ]
+    },
+    "active_zone_minutes": {
+      "activities-active-zone-minutes": [
+        {
+          "dateTime": "2026-08-20",
+          "value": {
+            "activeZoneMinutes": 50
+          }
+        }
+      ]
+    },
+    "spo2": [
+      {
+        "dateTime": "2026-08-20",
+        "value": {
+          "avg": 97,
+          "min": 95,
+          "max": 99
+        }
+      }
+    ],
+    "devices": [
+      {
+        "batteryLevel": 75,
+        "lastSyncTime": "2026-08-20T10:00:00",
+        "deviceVersion": "Watch"
+      }
+    ],
+    "activities": {
+      "activities": [
+        {
+          "logId": 456,
+          "startTime": "2026-08-20T12:00:00+00:00",
+          "activeDuration": 60000,
+          "duration": 70000,
+          "averageHeartRate": 120,
+          "calories": 10,
+          "distance": 0.1,
+          "steps": 150,
+          "activityName": "Walk",
+          "hasGps": true,
+          "tcxLink": "https://example.test/workout.tcx"
+        }
+      ]
+    },
+    "activity_series:minutesSedentary": {
+      "activities-tracker-minutesSedentary": [
+        {
+          "dateTime": "2026-08-20",
+          "value": "100"
+        }
+      ]
+    },
+    "activity_series:minutesLightlyActive": {
+      "activities-tracker-minutesLightlyActive": [
+        {
+          "dateTime": "2026-08-20",
+          "value": "100"
+        }
+      ]
+    },
+    "activity_series:minutesFairlyActive": {
+      "activities-tracker-minutesFairlyActive": [
+        {
+          "dateTime": "2026-08-20",
+          "value": "100"
+        }
+      ]
+    },
+    "activity_series:minutesVeryActive": {
+      "activities-tracker-minutesVeryActive": [
+        {
+          "dateTime": "2026-08-20",
+          "value": "100"
+        }
+      ]
+    },
+    "activity_series:distance": {
+      "activities-tracker-distance": [
+        {
+          "dateTime": "2026-08-20",
+          "value": "100"
+        }
+      ]
+    },
+    "activity_series:calories": {
+      "activities-tracker-calories": [
+        {
+          "dateTime": "2026-08-20",
+          "value": "100"
+        }
+      ]
+    },
+    "activity_series:steps": {
+      "activities-tracker-steps": [
+        {
+          "dateTime": "2026-08-20",
+          "value": "100"
+        }
+      ]
+    },
+    "intraday:heart": {
+      "activities-heart-intraday": {
+        "dataset": [
+          {
+            "time": "10:00:00",
+            "value": 60
+          }
+        ]
+      }
+    },
+    "intraday:steps": {
+      "activities-steps-intraday": {
+        "dataset": [
+          {
+            "time": "10:00:00",
+            "value": 60
+          }
+        ]
+      }
+    },
+    "tcx_xml": "<TrainingCenterDatabase xmlns=\"http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2\"><Track><Trackpoint><Time>2026-08-20T12:00:00+00:00</Time><Position><LatitudeDegrees>1</LatitudeDegrees><LongitudeDegrees>2</LongitudeDegrees></Position><DistanceMeters>0</DistanceMeters><AltitudeMeters>5</AltitudeMeters><HeartRateBpm><Value>100</Value></HeartRateBpm></Trackpoint></Track></TrainingCenterDatabase>"
+  },
+  "expected": [
+    {
+      "measurement": "HeartRate_Intraday",
+      "time": "2026-08-20T10:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 60
+      }
+    },
+    {
+      "measurement": "Steps_Intraday",
+      "time": "2026-08-20T10:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 60
+      }
+    },
+    {
+      "measurement": "HRV",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "dailyRmssd": 40.0,
+        "deepRmssd": 50.0
+      }
+    },
+    {
+      "measurement": "BreathingRate",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 16.0
+      }
+    },
+    {
+      "measurement": "Skin Temperature Variation",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "RelativeValue": 0.5
+      }
+    },
+    {
+      "measurement": "SPO2_Intraday",
+      "time": "2026-08-20T10:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 98.0
+      }
+    },
+    {
+      "measurement": "weight",
+      "time": "2026-08-20T10:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 80.0
+      }
+    },
+    {
+      "measurement": "bmi",
+      "time": "2026-08-20T10:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 23.63
+      }
+    },
+    {
+      "measurement": "Sleep Summary",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "isMainSleep": "true",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "SleepSessionId": "123",
+        "efficiency": 90,
+        "minutesAfterWakeup": 0,
+        "minutesAsleep": 420,
+        "minutesToFallAsleep": 10,
+        "minutesInBed": 480,
+        "minutesAwake": 60,
+        "minutesLight": 240,
+        "minutesREM": 120,
+        "minutesDeep": 60,
+        "startTime": "2026-08-20T00:00:00",
+        "endTime": "2026-08-20T08:00:00"
+      }
+    },
+    {
+      "measurement": "Sleep Levels",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "isMainSleep": "true",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "SleepSessionId": "123",
+        "level": 0,
+        "stageName": "deep",
+        "duration_seconds": 60
+      }
+    },
+    {
+      "measurement": "Sleep Levels",
+      "time": "2026-08-20T08:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "isMainSleep": "true",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "SleepSessionId": "123",
+        "level": 3,
+        "stageName": "awake"
+      }
+    },
+    {
+      "measurement": "Activity Minutes",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "minutesSedentary": 100
+      }
+    },
+    {
+      "measurement": "Activity Minutes",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "minutesLightlyActive": 100
+      }
+    },
+    {
+      "measurement": "Activity Minutes",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "minutesFairlyActive": 100
+      }
+    },
+    {
+      "measurement": "Activity Minutes",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "minutesVeryActive": 100
+      }
+    },
+    {
+      "measurement": "distance",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 100.0
+      }
+    },
+    {
+      "measurement": "calories",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 100.0
+      }
+    },
+    {
+      "measurement": "Total Steps",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 100.0
+      }
+    },
+    {
+      "measurement": "HR zones",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "Normal": 10,
+        "Fat Burn": 20,
+        "Cardio": 30,
+        "Peak": 40
+      }
+    },
+    {
+      "measurement": "RestingHR",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 55.0
+      }
+    },
+    {
+      "measurement": "HR zones",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "activeZoneMinutes": 50
+      }
+    },
+    {
+      "measurement": "SPO2",
+      "time": "2026-08-20T00:00:00+00:00",
+      "tags": {
+        "Device": "Watch",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "avg": 97.0,
+        "max": 99.0,
+        "min": 95.0
+      }
+    },
+    {
+      "measurement": "Activity Records",
+      "time": "2026-08-20T12:00:00+00:00",
+      "tags": {
+        "ActivityName": "Walk",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "Device": "Watch",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "ActivityId": "456",
+        "startTime": "2026-08-20T12:00:00+00:00",
+        "ActiveDuration": 60,
+        "AverageHeartRate": 120,
+        "calories": 10,
+        "duration": 70,
+        "distance": 0.1,
+        "steps": 150,
+        "endTime": "2026-08-20T12:01:10+00:00"
+      }
+    },
+    {
+      "measurement": "GPS",
+      "time": "2026-08-20T12:00:00+00:00",
+      "tags": {
+        "ActivityName": "Walk",
+        "UserId": "u",
+        "Provider": "fitbit",
+        "Device": "Watch",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "ActivityId": "456",
+        "lat": 1.0,
+        "lon": 2.0,
+        "altitude": 5.0,
+        "distance": 0.0,
+        "heart_rate": 100
+      }
+    },
+    {
+      "measurement": "DeviceBatteryLevel",
+      "time": "2026-08-20T10:00:00+00:00",
+      "tags": {
+        "UserId": "u",
+        "Provider": "fitbit",
+        "Device": "Watch",
+        "DeviceId": "d"
+      },
+      "fields": {
+        "value": 75.0
+      }
+    }
+  ]
+}
