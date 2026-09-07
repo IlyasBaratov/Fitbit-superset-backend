@@ -237,7 +237,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     `tests/test_architecture.py` now covers `google_calendar/mapper.py` (missing per-provider
     mapper filenames are skipped). 180 → 191 tests. The cloud image still needs
     `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
-- [ ] **C1.6 Calendar provider + ingestion service + jobs** — blocked by: C1.2, C1.4, C1.5
+- [x] **C1.6 Calendar provider + ingestion service + jobs** — blocked by: C1.2, C1.4, C1.5
   - Files: `app/providers/google_calendar/provider.py`, `app/providers/factory.py`
     (`create_calendar_provider(settings, timezone) -> provider | None`),
     `app/ingestion/service.py` (`calendar=None, calendar_repository=None` params,
@@ -258,7 +258,22 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
   - Done when: tests: window math across midnight, disabled → no calls, one calendar 403 does
     not block the next, missing/revoked token returns `[]` and logs once, points written
     through the calendar repository, never through the health repository.
-  - Notes:
+  - Notes: done: `app/providers/google_calendar/provider.py` adds `GoogleCalendarProvider`
+    (`fetch_events(start_date, end_date)`) turning whole local days into the half-open UTC
+    window Google expects (`local_date_boundary_utc(start)` → `local_date_boundary_utc(end + 1
+    day)`), looping `calendar_ids` through the `_available` pattern (403/404 or an exhausted
+    retry budget warns and skips that calendar only) and mapping each page with `map_events`;
+    an `AuthenticationError` anywhere in the loop returns `[]` and logs *not connected* once
+    per state change, so health collection is never affected. `create_calendar_provider(
+    settings, timezone)` returns `None` while `CALENDAR_SYNC_ENABLED` is false and otherwise
+    builds token manager + transport + client **without** refreshing at startup (the token file
+    may not exist yet). `IngestionService` takes optional `calendar` / `calendar_repository` and
+    `sync_calendar(start, end)` writes only through the calendar repository (`False` when either
+    is absent); `IngestionJobs.calendar_dates()` / `sync_calendar()` roll the
+    `[today − back, today + ahead]` window in the provider timezone, `initial_sync` runs it once
+    and `bulk_sync` covers the manual range once. Scheduler registration stays with C1.7.
+    191 → 204 tests. The cloud image still needs `pip install cffi` on top of
+    `requirements-dev.txt` (see C1.1).
 - [ ] **C1.7 Scheduler + worker wiring + setup docs** — blocked by: C1.6
   - Files: `app/ingestion/scheduler.py`, `app/worker/main.py`, `tests/test_ingestion_schedule.py`,
     `tests/test_worker_entrypoint.py`, `docs/CALENDAR_SYNC.md`, `README.md`.
