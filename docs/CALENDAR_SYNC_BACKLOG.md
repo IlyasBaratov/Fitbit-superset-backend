@@ -119,7 +119,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
 
 ### C1 Worker ingestion
 
-- [ ] **C1.1 Worker settings for calendar sync** — blocked by: none
+- [x] **C1.1 Worker settings for calendar sync** — blocked by: none
   - Files: `app/core/config.py` (`WorkerSettings`), `app/worker/main.py` (secret filter),
     `.env.example`, `compose.yml` (`fitbit-fetch-data` env), `tests/test_worker_config.py`.
   - Do: add frozen fields `calendar_sync_enabled` (bool, default false, same truthy parsing
@@ -134,7 +134,11 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     `CALENDAR_SYNC_DAYS_AHEAD`, `CALENDAR_TOKEN_FILE_PATH: /app/tokens/google_calendar.token`.
     Add `calendar_client_secret` to the `configure_logging` secrets tuple.
   - Done when: tests cover defaults, comma parsing, fallback credentials, invalid days.
-  - Notes:
+  - Notes: done: 8 frozen `WorkerSettings` fields + `CALENDAR_API_BASE_URL` override,
+    negative day counts raise `ConfigurationError`, secret is `repr=False` and in the worker
+    secret filter; `.env.example` and `compose.yml` (`fitbit-fetch-data`) carry the vars.
+    141 → 158 tests. Note: the cloud image needs `pip install cffi` on top of
+    `requirements-dev.txt` or 5 API test modules fail to collect (`_cffi_backend`).
 - [ ] **C1.2 Calendar token manager** — blocked by: C1.1
   - Files: `app/providers/google_calendar/__init__.py`, `app/providers/google_calendar/auth.py`,
     `tests/test_token_managers.py`.

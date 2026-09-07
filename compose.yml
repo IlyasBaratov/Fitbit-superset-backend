@@ -82,6 +82,13 @@ services:
       GOOGLE_HEALTH_BASE_URL: "${GOOGLE_HEALTH_BASE_URL:-https://health.googleapis.com}"
       GOOGLE_HEALTH_API_VERSION: "${GOOGLE_HEALTH_API_VERSION:-v4}"
       GOOGLE_OAUTH_TOKEN_URL: "${GOOGLE_OAUTH_TOKEN_URL:-https://oauth2.googleapis.com/token}"
+      CALENDAR_SYNC_ENABLED: "${CALENDAR_SYNC_ENABLED:-false}"
+      CALENDAR_IDS: "${CALENDAR_IDS:-primary}"
+      CALENDAR_CLIENT_ID: "${CALENDAR_CLIENT_ID:-}"
+      CALENDAR_CLIENT_SECRET: "${CALENDAR_CLIENT_SECRET:-}"
+      CALENDAR_TOKEN_FILE_PATH: /app/tokens/google_calendar.token
+      CALENDAR_SYNC_DAYS_BACK: "${CALENDAR_SYNC_DAYS_BACK:-7}"
+      CALENDAR_SYNC_DAYS_AHEAD: "${CALENDAR_SYNC_DAYS_AHEAD:-1}"
       DEVICENAME: "${DEVICENAME:-Your_Device_Name}"
       USER_ID: "${USER_ID:-user_001}"
       DEVICE_ID: "${DEVICE_ID:-fitbit_air_001}"

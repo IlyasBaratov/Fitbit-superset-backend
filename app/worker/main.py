@@ -51,6 +51,7 @@ def main() -> int:
             secrets=(
                 settings.client_secret,
                 settings.google_client_secret,
+                settings.calendar_client_secret,
                 settings.influxdb_password,
                 settings.influxdb_token,
                 settings.influxdb_v3_access_token,
