@@ -139,7 +139,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     secret filter; `.env.example` and `compose.yml` (`fitbit-fetch-data`) carry the vars.
     141 → 158 tests. Note: the cloud image needs `pip install cffi` on top of
     `requirements-dev.txt` or 5 API test modules fail to collect (`_cffi_backend`).
-- [ ] **C1.2 Calendar token manager** — blocked by: C1.1
+- [x] **C1.2 Calendar token manager** — blocked by: C1.1
   - Files: `app/providers/google_calendar/__init__.py`, `app/providers/google_calendar/auth.py`,
     `tests/test_token_managers.py`.
   - Do: `GoogleCalendarTokenManager(GoogleTokenManager)` with `provider = "google_calendar"`.
@@ -153,7 +153,13 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
   - Done when: tests: refresh writes the calendar token path, keeps `refresh_token` when
     Google omits it, provider mismatch raises `AuthenticationError`, health token file untouched,
     error text never contains the secret, mtime change triggers a reload.
-  - Notes:
+  - Notes: done: `app/providers/google_calendar/auth.py` adds
+    `GoogleCalendarTokenManager(GoogleTokenManager)` (`provider = "google_calendar"`), which
+    re-points the inherited refresh at the calendar token path and `CALENDAR_CLIENT_ID/SECRET`
+    via `dataclasses.replace`, remembers the token file `st_mtime_ns` on `load()`/`_save()` and
+    drops the cached tokens in `get_access_token()` when the file changed underneath it.
+    158 → 162 tests. The cloud image still needs `pip install cffi` on top of
+    `requirements-dev.txt` (see C1.1).
 - [ ] **C1.3 OAuth connect helpers + CLI authorize script** — blocked by: C1.2
   - Files: `app/providers/google_calendar/connect.py` (new), `scripts/google_calendar_authorize.py`
     (new), `tests/test_calendar_connect.py`, `docs/CALENDAR_SYNC.md` (new: Setup section).
