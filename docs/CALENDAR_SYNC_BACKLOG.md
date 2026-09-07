@@ -160,7 +160,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     drops the cached tokens in `get_access_token()` when the file changed underneath it.
     158 → 162 tests. The cloud image still needs `pip install cffi` on top of
     `requirements-dev.txt` (see C1.1).
-- [ ] **C1.3 OAuth connect helpers + CLI authorize script** — blocked by: C1.2
+- [x] **C1.3 OAuth connect helpers + CLI authorize script** — blocked by: C1.2
   - Files: `app/providers/google_calendar/connect.py` (new), `scripts/google_calendar_authorize.py`
     (new), `tests/test_calendar_connect.py`, `docs/CALENDAR_SYNC.md` (new: Setup section).
   - Do: helpers, no I/O beyond the injected session: `authorization_url(client_id,
@@ -180,7 +180,17 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     shape); script test drives the handler with a fake request path and a mocked exchange →
     token file content; wrong `state` → rejected, nothing written. Docs: run on the host,
     token lands in `./tokens/`, which Compose bind-mounts into the worker.
-  - Notes:
+  - Notes: done: `app/providers/google_calendar/connect.py` holds `authorization_url`,
+    `exchange_code`, `token_record` and best-effort `revoke` (session injected, no other I/O,
+    failures never echo the response body); `scripts/google_calendar_authorize.py` prints the
+    URL, opens a browser and serves one loopback request whose `state` is compared with
+    `secrets.compare_digest` before the exchange, saving through
+    `GoogleCalendarTokenManager._save` (atomic, `0600` from `NamedTemporaryFile`). No stdin, no
+    token ever printed. `docs/CALENDAR_SYNC.md` adds Setup, Environment and Privacy sections.
+    162 → 175 tests. The script is run as `python -m scripts.google_calendar_authorize` from
+    the repository root (`scripts/` is a namespace package; running the file directly leaves
+    `app` off `sys.path`). The cloud image still needs `pip install cffi` on top of
+    `requirements-dev.txt` (see C1.1).
 - [ ] **C1.4 Calendar HTTP client** — blocked by: C1.1
   - Files: `app/providers/google_calendar/client.py`, `tests/test_google_calendar_client.py`.
   - Do: `GoogleCalendarClient(settings, transport)`;
