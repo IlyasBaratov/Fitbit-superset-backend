@@ -191,7 +191,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     the repository root (`scripts/` is a namespace package; running the file directly leaves
     `app` off `sys.path`). The cloud image still needs `pip install cffi` on top of
     `requirements-dev.txt` (see C1.1).
-- [ ] **C1.4 Calendar HTTP client** — blocked by: C1.1
+- [x] **C1.4 Calendar HTTP client** — blocked by: C1.1
   - Files: `app/providers/google_calendar/client.py`, `tests/test_google_calendar_client.py`.
   - Do: `GoogleCalendarClient(settings, transport)`;
     `list_events(calendar_id, time_min, time_max) -> list[dict]`: GET
@@ -201,7 +201,14 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     (5xx skip) → stop and log, keep collected items.
   - Done when: Mock-transport tests: params, id encoding (`user@example.com`), 3-page
     pagination, `None` page handling. No network at import (architecture test).
-  - Notes:
+  - Notes: done: `app/providers/google_calendar/client.py` adds `GoogleCalendarClient`
+    (`list_events(calendar_id, time_min, time_max)`) building the events URL from
+    `calendar_api_base_url` with `quote(calendar_id, safe="")`, sending the D5 params
+    (`singleEvents`/`showDeleted` as the strings `"true"`, `orderBy=startTime`,
+    `maxResults=250`) and following `nextPageToken` up to `MAX_PAGES=50`; a non-dict page
+    (the transport's 5xx skip returns `None`) logs and returns the events collected so far.
+    Endpoint definitions only, no parsing — same shape as `FitbitClient`. 175 → 180 tests.
+    The cloud image still needs `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
 - [ ] **C1.5 Pure event mapper + schema contract** — blocked by: none
   - Files: `app/providers/google_calendar/mapper.py`, `app/domain/measurements.py`
     (`FIELD_TYPES["Calendar Events"]`), `docs/influxdb_schema.md`,
