@@ -209,7 +209,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     (the transport's 5xx skip returns `None`) logs and returns the events collected so far.
     Endpoint definitions only, no parsing — same shape as `FitbitClient`. 175 → 180 tests.
     The cloud image still needs `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
-- [ ] **C1.5 Pure event mapper + schema contract** — blocked by: none
+- [x] **C1.5 Pure event mapper + schema contract** — blocked by: none
   - Files: `app/providers/google_calendar/mapper.py`, `app/domain/measurements.py`
     (`FIELD_TYPES["Calendar Events"]`), `docs/influxdb_schema.md`,
     `tests/fixtures/google_calendar_contract.json`, `tests/test_google_calendar_mapper.py`,
@@ -223,7 +223,20 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     plus expected normalized points (same style as `tests/fixtures/google_mapping_contract.json`).
   - Done when: fixture parity test passes; `FIELD_TYPES` entry; schema doc row; architecture
     test extended; `tests/test_health_schema.py` still green.
-  - Notes:
+  - Notes: done: `app/providers/google_calendar/mapper.py` adds `map_events(items,
+    calendar_id, local_timezone)` (pytz zone, like the Fitbit mapper) returning `Calendar
+    Events` `HealthPoint`s per the data contract: timed starts through `utc_timestamp`,
+    all-day through `local_date_boundary_utc` (duration from the date difference, so a DST day
+    is 25 h), `originalStartTime` fallback for cancelled instances, items without an `id` or
+    any start skipped, `summary` reduced to ≤ 200 printable characters with whitespace
+    collapsed, attendee count excluding `self` (no addresses stored, D9), and Google's omitted
+    defaults restored (`status=confirmed`, `eventType=default`, `transparency=opaque`).
+    Empty strings and absent ends drop out through `sanitize_fields`/`coerce_fields`.
+    `FIELD_TYPES["Calendar Events"]` + a schema doc row (person-keyed tags) added;
+    `tests/fixtures/google_calendar_contract.json` holds 9 items → 7 reviewed expected rows;
+    `tests/test_architecture.py` now covers `google_calendar/mapper.py` (missing per-provider
+    mapper filenames are skipped). 180 → 191 tests. The cloud image still needs
+    `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
 - [ ] **C1.6 Calendar provider + ingestion service + jobs** — blocked by: C1.2, C1.4, C1.5
   - Files: `app/providers/google_calendar/provider.py`, `app/providers/factory.py`
     (`create_calendar_provider(settings, timezone) -> provider | None`),

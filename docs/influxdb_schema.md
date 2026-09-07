@@ -10,7 +10,7 @@ Every point has these string tags:
 | Tag | Source |
 | --- | --- |
 | `UserId` | Stable `USER_ID` configuration |
-| `Provider` | Active `HEALTH_API_PROVIDER` (`google` or `fitbit`) |
+| `Provider` | Active `HEALTH_API_PROVIDER` (`google` or `fitbit`); `google_calendar` for calendar rows |
 | `Device` | Human-readable `DEVICENAME` or discovered name |
 | `DeviceId` | Stable `DEVICE_ID` configuration |
 
@@ -45,6 +45,7 @@ therefore updates the same point.
 | `bmi` | — | `value`, `weightKg`, `heightMeters` float; `isCalculated` boolean | Weight timestamp; only when weight and height exist |
 | `DeviceBatteryLevel` | — | `value` float | Percent; omitted when provider has no battery API |
 | `Device Metadata` | — | `deviceName`, `deviceModel`, `timezone`, `lastSyncTime`, `firmwareVersion`, `connectionStatus` string; `batteryPercent` float | Actual available metadata only; written when content changes |
+| `Calendar Events` | `CalendarId`, `EventId` | `summary`, `startTime`, `endTime`, `status`, `eventType`, `transparency`, `responseStatus`, `recurringEventId`, `updated` string; `duration_seconds`, `attendees` integer; `isOrganizer`, `isAllDay` boolean | Event start; all-day events use the local-day boundary. Person-keyed: `Provider=google_calendar`, `Device`/`DeviceId` are constants, not the wearable. `summary` keeps ≤ 200 printable characters; attendee identities are never stored |
 
 ## Compatibility decisions
 
