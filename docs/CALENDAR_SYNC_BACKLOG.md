@@ -441,7 +441,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
 
 ## Dependency order
 
-```
+```text
 C1.1 → C1.2 → C1.3 → C1.8 ┐
 C1.1 → C1.4 ┐             ├→ C2.4 ┐
 C1.5 ───────┼→ C1.6 → C1.7 → C5.1 │
