@@ -8,7 +8,7 @@ from app.core.config import WorkerSettings
 from app.core.exceptions import ConfigurationError, ProviderError, StorageError
 from app.core.logging import configure_logging
 from app.domain.normalization import build_common_tags
-from app.providers.factory import create_provider
+from app.providers.factory import create_calendar_provider, create_provider
 from app.storage.influx.repository import InfluxHealthRepository
 from app.ingestion.service import IngestionService
 from app.ingestion.metadata import DeviceMetadataState
@@ -35,7 +35,25 @@ def run(settings: WorkerSettings, stop_event=None) -> None:
         repository = InfluxHealthRepository(settings, tags, provider.timezone.zone)
         resources.callback(repository.close)
         metadata = DeviceMetadataState(settings.device_metadata_state_path, tags)
-        ingestion = IngestionService(provider, repository, metadata)
+        calendar = create_calendar_provider(settings, provider.timezone)
+        calendar_repository = None
+        if calendar is not None:
+            resources.callback(calendar.close)
+            # Calendar points are keyed by the person, never by the wearable device (D4).
+            calendar_repository = InfluxHealthRepository(
+                settings,
+                build_common_tags(
+                    settings.user_id,
+                    "google_calendar",
+                    "Google Calendar",
+                    "google_calendar",
+                ),
+                provider.timezone.zone,
+            )
+            resources.callback(calendar_repository.close)
+        ingestion = IngestionService(
+            provider, repository, metadata, calendar, calendar_repository
+        )
         jobs = IngestionJobs(ingestion, settings, provider.timezone)
         IngestionScheduler(jobs, settings, stop_event=stop_event).run()
 

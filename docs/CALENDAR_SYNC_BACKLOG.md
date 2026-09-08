@@ -274,7 +274,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     and `bulk_sync` covers the manual range once. Scheduler registration stays with C1.7.
     191 → 204 tests. The cloud image still needs `pip install cffi` on top of
     `requirements-dev.txt` (see C1.1).
-- [ ] **C1.7 Scheduler + worker wiring + setup docs** — blocked by: C1.6
+- [x] **C1.7 Scheduler + worker wiring + setup docs** — blocked by: C1.6
   - Files: `app/ingestion/scheduler.py`, `app/worker/main.py`, `tests/test_ingestion_schedule.py`,
     `tests/test_worker_entrypoint.py`, `docs/CALENDAR_SYNC.md`, `README.md`.
   - Do: `register()` adds `every(15).minutes.do(_run_job, jobs.sync_calendar)` only when the
@@ -290,7 +290,20 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
   - Done when: cadence test asserts 10 jobs without calendar and 11 with; entrypoint test shows
     both calendar `close` callbacks on exit; `docker compose config --quiet` passes (skip with
     a note if Docker is unavailable in the run environment).
-  - Notes:
+  - Notes: done: `IngestionScheduler.register()` adds
+    `every(15).minutes.do(_run_job, jobs.sync_calendar)` only when the ingestion service holds a
+    calendar provider (10 jobs without, 11 with), registered beside the other periodic jobs so a
+    manual/bulk stack does not poll. `app/worker/main.py` builds the calendar provider after the
+    health provider (`create_calendar_provider(settings, provider.timezone)`, `None` while
+    disabled) and then a second `InfluxHealthRepository` with its own client and person-keyed
+    common tags (`Provider=google_calendar`, `Device=Google Calendar`, `DeviceId=google_calendar`,
+    D4); both `close` callbacks join the health resources on the same `ExitStack`, so a scheduling
+    failure still closes all four. `docs/CALENDAR_SYNC.md` gains "Running it with Docker" (connect,
+    enable, `docker compose up -d fitbit-fetch-data`, expected log lines, the `Calendar Events`
+    query) and a Troubleshooting section; README lists 23 measurements and points at the doc.
+    `docker compose config --quiet` passes in the cloud image (the Docker CLI is present; config
+    validation needs no daemon). 204 → 207 tests. The cloud image still needs `pip install cffi`
+    on top of `requirements-dev.txt` (see C1.1).
 - [ ] **C1.8 Connect and callback API** — blocked by: C1.3
   - Files: `app/core/config.py` (API `Settings`), `app/api/routes/calendar.py` (new),
     `app/api/calendar_connect.py` (new: nonce store + orchestration), `app/api/main.py`

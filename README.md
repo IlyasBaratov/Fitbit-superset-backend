@@ -196,14 +196,19 @@ uv run --no-project --with-requirements requirements.txt python -m app.worker.ma
 ## InfluxDB measurements
 
 Every point includes the `UserId`, `Provider`, `Device`, and `DeviceId` tags.
-The collector writes these 22 measurements when the active provider and device
+The collector writes these 23 measurements when the active provider and device
 return the corresponding data:
 
 `HeartRate_Intraday`, `RestingHR`, `HRV`, `HR zones`, `Steps_Intraday`,
 `Total Steps`, `Activity Minutes`, `Activity Records`, `calories`, `distance`,
 `GPS`, `Sleep Summary`, `Sleep Levels`, `SPO2`, `SPO2_Intraday`,
 `BreathingRate`, `Skin Temperature Variation`, `weight`, `height`, `bmi`,
-`DeviceBatteryLevel`, and `Device Metadata`.
+`DeviceBatteryLevel`, `Device Metadata`, and `Calendar Events`.
+
+`Calendar Events` is written only when `CALENDAR_SYNC_ENABLED=true` and a Google
+Calendar is connected; it is keyed by the person rather than by the wearable
+device. See [docs/CALENDAR_SYNC.md](docs/CALENDAR_SYNC.md) for setup, sync
+policy and troubleshooting.
 
 Canonical units are BPM, seconds for exercise durations, kilometers for
 distance, kilograms for weight, centimeters for `height.value`, percent for

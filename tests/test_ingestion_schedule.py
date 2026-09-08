@@ -19,7 +19,7 @@ def test_inclusive_bulk_windows_and_boundaries():
 
 def test_schedule_cadence_and_no_duplicates():
     settings = SimpleNamespace(schedule_auto_update=True, auto_update_date_range=1)
-    jobs = IngestionJobs(Mock(), settings, pytz.utc)
+    jobs = IngestionJobs(Mock(calendar=None), settings, pytz.utc)
     runner = IngestionScheduler(jobs, settings)
     runner.register()
     runner.register()
@@ -29,6 +29,18 @@ def test_schedule_cadence_and_no_duplicates():
     assert cadence.count((20, "minutes")) == 2
     assert cadence.count((6, "hours")) == 2
     assert (3, "minutes") in cadence
+    assert (15, "minutes") not in cadence
+
+
+def test_calendar_job_is_registered_only_when_a_calendar_is_connected():
+    settings = SimpleNamespace(schedule_auto_update=True, auto_update_date_range=1)
+    jobs = IngestionJobs(Mock(calendar=Mock()), settings, pytz.utc)
+    runner = IngestionScheduler(jobs, settings)
+    runner.register()
+    assert len(runner.scheduler.jobs) == 11
+    calendar_jobs = [j for j in runner.scheduler.jobs if (j.interval, j.unit) == (15, "minutes")]
+    assert len(calendar_jobs) == 1
+    assert calendar_jobs[0].job_func.args == (jobs.sync_calendar,)
 
 
 def test_calendar_window_follows_the_local_day():

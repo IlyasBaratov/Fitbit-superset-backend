@@ -39,6 +39,54 @@ Google. Full design and progress: `docs/CALENDAR_SYNC_BACKLOG.md`.
 Re-running the script re-authorizes and overwrites the token file. To disconnect, delete the
 token file; the worker notices on its next cycle.
 
+## Running it with Docker
+
+```bash
+python -m scripts.google_calendar_authorize      # on the host, writes ./tokens/google_calendar.token
+echo 'CALENDAR_SYNC_ENABLED=true' >> .env        # plus CALENDAR_IDS / CALENDAR_CLIENT_* if needed
+docker compose up -d fitbit-fetch-data
+docker compose logs -f fitbit-fetch-data
+```
+
+`./tokens` is bind-mounted into the collector, so the token file needs no rebuild and no
+restart: the worker re-reads it whenever its mtime changes.
+
+Once `CALENDAR_SYNC_ENABLED=true`, the collector syncs the calendar once at startup and then
+every 15 minutes, re-reading the whole
+`[today − CALENDAR_SYNC_DAYS_BACK, today + CALENDAR_SYNC_DAYS_AHEAD]` window so that moved and
+cancelled events are corrected. Health collection runs independently and never waits for it.
+
+Expected log lines:
+
+| Line | Meaning |
+| --- | --- |
+| `Google Calendar connected` | A token was found and the first sync succeeded |
+| `Google Calendar is not connected; skipping calendar sync until it is` | No token file, or it was revoked or deleted — logged once per state change, not every cycle |
+| `Successfully wrote N points to InfluxDB` | The sync reached InfluxDB (shared with health writes) |
+| `calendar <id> unavailable: permission or device capability (HTTP 403)` | That one calendar was skipped; the others still sync |
+
+Check the stored data:
+
+```bash
+docker compose exec influxdb influx -database FitbitHealthStats \
+  -execute 'SELECT * FROM "Calendar Events" ORDER BY time DESC LIMIT 5'
+```
+
+## Troubleshooting
+
+- **`Google Calendar is not connected`** — the token file is missing at
+  `CALENDAR_TOKEN_FILE_PATH` or no longer valid. Re-run the authorize script on the host and
+  confirm the file exists in `./tokens/`; the worker picks it up within one cycle.
+- **No calendar job at all** — `CALENDAR_SYNC_ENABLED` is not truthy, or
+  `SCHEDULE_AUTO_UPDATE` is off. The calendar job is registered beside the other periodic jobs.
+- **HTTP 403 for a calendar** — the *Google Calendar API* is not enabled in the client's
+  project, or the token was granted without the `calendar.events.readonly` scope. Only that
+  calendar is skipped; fix the scope and re-authorize.
+- **The token stops working every seven days** — the OAuth consent screen is still in
+  *Testing*. Switch it to *In production* (see step 1 of Setup).
+- **HTTP 404 for a calendar id** — the id in `CALENDAR_IDS` is wrong or not shared with the
+  authorized account.
+
 ## Environment
 
 | Variable | Default | Meaning |
