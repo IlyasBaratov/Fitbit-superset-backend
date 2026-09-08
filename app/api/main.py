@@ -11,6 +11,7 @@ from app.ai.gemini import GeminiService
 from app.storage.influx.queries import InfluxService
 from app.api.routes import ai, system, health, calendar
 from app.api.calendar_connect import CalendarConnectService
+from app.api.calendar_service import CalendarReadService
 from app.api.health_service import HealthReadService
 
 
@@ -39,6 +40,7 @@ def create_app(settings=None, influx=None, gemini=None, clock=None):
             app.state.clock = clock
             app.state.analysis = AnalysisService(cfg, db, llm, clock)
             app.state.health = HealthReadService(cfg, db, clock)
+            app.state.calendar = CalendarReadService(cfg, db, clock)
             connect = CalendarConnectService(cfg, clock=clock)
             resources.callback(connect.close)
             app.state.calendar_connect = connect

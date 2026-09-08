@@ -112,6 +112,40 @@ docker compose exec influxdb influx -database FitbitHealthStats \
   -execute 'SELECT * FROM "Calendar Events" ORDER BY time DESC LIMIT 5'
 ```
 
+## Endpoints
+
+| Endpoint | Auth | Purpose |
+| --- | --- | --- |
+| `GET /api/health/calendar?period=7d` | bearer | Stored `Calendar Events` rows, unprocessed (see docs/HEALTH_API.md) |
+| `GET /api/calendar/events?period=7d` | bearer | Readable events with the heart-rate response measured around each one |
+
+`/api/calendar/events` follows the health period rules: `?period=7d`, default
+`AI_DEFAULT_ANALYSIS_DAYS`, maximum `AI_MAX_ANALYSIS_DAYS`, whole local days up to now, and no
+other query parameter. It reuses the health error codes — `422 INVALID_HEALTH_PERIOD`,
+`422 HEALTH_QUERY_TOO_LARGE`, `503 DATA_SERVICE_UNAVAILABLE`.
+
+The response carries `start`, `end`, `timezone`, `bucket_minutes` (the intraday resolution the
+period was read at, 7 d → 1 min, 30 d → 3 min, 90 d → 7 min, so no read exceeds the 20 000-row
+cap) and `events[]`. Each event has `event_id`, `calendar_id`, `summary`, `start`, `end`,
+`duration_minutes`, `attendees`, `is_organizer`, `response_status`, `event_type`,
+`recurring_event_id`, `notes[]` and `vitals`:
+
+```jsonc
+{
+  "mean_hr": 92.5, "max_hr": 108, "sample_count": 30, "coverage_pct": 100,
+  "hr_vs_resting_pct": 54.1667,        // against the resting HR of the event's local day
+  "steps": 120, "steps_per_minute": 4, "movement_confounded": false,
+  "pre30_mean_hr": 78.2, "post30_mean_hr": 80.1, "recovery_delta": -12.4
+}
+```
+
+Only events whose heart-rate response can mean something are listed: cancelled, all-day, *free*
+(`transparent`) and shorter-than-10-minute events are left out, and a moved event appears once,
+with its newest stored row. `vitals` is `null` when heart-rate buckets cover less than half of
+the event; `notes[]` then says so, and also flags movement during the event or a missing resting
+baseline (the baseline falls back to the nearest resting heart rate within seven days). Elevated
+heart rate is a stress *proxy*, never a diagnosis: movement, caffeine and illness confound it.
+
 ## Troubleshooting
 
 - **`Google Calendar is not connected`** — the token file is missing at

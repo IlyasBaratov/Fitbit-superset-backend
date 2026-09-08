@@ -408,7 +408,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     workout spans share one `startTime`/`endTime`-then-duration helper. Knob constants carry the
     `# ponytail:` comments the item asked for. 223 → 237 tests. The cloud image still needs
     `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
-- [ ] **C2.3 `GET /api/calendar/events`** — blocked by: C2.1, C2.2
+- [x] **C2.3 `GET /api/calendar/events`** — blocked by: C2.1, C2.2
   - Files: `app/api/schemas/calendar.py`, `app/api/calendar_service.py`,
     `app/api/routes/calendar.py`, `app/api/main.py` (router + `app.state.calendar`),
     `app/api/dependencies.py`, `docs/CALENDAR_SYNC.md` (API section), `tests/test_calendar_routes.py`.
@@ -423,7 +423,24 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     (`INVALID_HEALTH_PERIOD` 422, `HEALTH_QUERY_TOO_LARGE` 422, `DATA_SERVICE_UNAVAILABLE` 503).
   - Done when: TestClient tests: 401, empty period, vitals computed from mocked rows, unknown
     query param → 422, no secret text in errors.
-  - Notes:
+  - Notes: done: the period rules moved out of `HealthReadService._interval` into
+    `app.api.health_service.resolve_interval(settings, clock, period)`, which now also returns
+    the day count the calendar route needs for `bucket_minutes(days)`; the health service calls
+    it and is otherwise untouched. `app/api/calendar_service.py` adds `CalendarReadService`
+    (`app.state.calendar`, `get_calendar` dependency): it reads `Calendar Events` for the period,
+    keeps `usable_events` only and — just for those — reads `HeartRate_Intraday` and
+    `Steps_Intraday` at `bucket=<bucket_minutes(days)>m`, `Activity Records` and `RestingHR`,
+    padding the vitals reads by `CONTEXT_MINUTES` at both ends (worst case 83 d → 19 930 of the
+    20 000 rows, so the cap still holds) and the `RestingHR` read by
+    `BASELINE_MAX_AGE_DAYS = 7` days back. The baseline is the resting rate of the event's local
+    day, else the nearest within seven days, else `None` (which `event_vitals` reports as a
+    note). A period with no readable event issues no vitals reads at all. `GET
+    /api/calendar/events` reuses `HealthQuery` (so an unknown parameter is still 422) and the
+    health error codes; `app/api/schemas/calendar.py` holds the strict (`extra=forbid`,
+    `strict=True`) `CalendarEventsResponse` / `CalendarEvent` / `EventVitals`, so a drift between
+    `event_vitals` and the contract fails loudly instead of leaking a field.
+    `docs/CALENDAR_SYNC.md` gains an Endpoints section. 237 → 244 tests. The cloud image still
+    needs `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
 - [ ] **C2.4 Connection status + disconnect** — blocked by: C1.8, C2.1
   - Files: `app/api/routes/calendar.py`, `app/api/calendar_connect.py`,
     `app/api/schemas/calendar.py`, `docs/CALENDAR_SYNC.md`, `tests/test_calendar_connect_routes.py`.

@@ -32,33 +32,39 @@ HEALTH_MEASUREMENTS = {
 }
 
 
+def resolve_interval(settings, clock, period=None):
+    """Whole local days up to now; shared by every bounded read (health, calendar)."""
+    days = settings.default_days
+    if period is not None:
+        if not re.fullmatch(r"[1-9][0-9]?d", period):
+            raise APIError(
+                "INVALID_HEALTH_PERIOD",
+                "Period must be a day count such as 7d.",
+                422,
+            )
+        days = int(period[:-1])
+    if not 1 <= days <= settings.max_days:
+        raise APIError(
+            "INVALID_HEALTH_PERIOD",
+            f"Period must be between 1 and {settings.max_days} days.",
+            422,
+        )
+    zone = pytz.timezone(settings.timezone)
+    end = clock().astimezone(timezone.utc)
+    first = end.astimezone(zone).date() - timedelta(days=days - 1)
+    start = zone.localize(datetime.combine(first, datetime.min.time())).astimezone(
+        timezone.utc
+    )
+    return start, end, days
+
+
 class HealthReadService:
     def __init__(self, settings, repository, clock=None):
         self.settings, self.repository = settings, repository
         self.clock = clock or (lambda: datetime.now(timezone.utc))
 
     def _interval(self, period):
-        days = self.settings.default_days
-        if period is not None:
-            if not re.fullmatch(r"[1-9][0-9]?d", period):
-                raise APIError(
-                    "INVALID_HEALTH_PERIOD",
-                    "Period must be a day count such as 7d.",
-                    422,
-                )
-            days = int(period[:-1])
-        if not 1 <= days <= self.settings.max_days:
-            raise APIError(
-                "INVALID_HEALTH_PERIOD",
-                f"Period must be between 1 and {self.settings.max_days} days.",
-                422,
-            )
-        zone = pytz.timezone(self.settings.timezone)
-        end = self.clock().astimezone(timezone.utc)
-        first = end.astimezone(zone).date() - timedelta(days=days - 1)
-        start = zone.localize(datetime.combine(first, datetime.min.time())).astimezone(
-            timezone.utc
-        )
+        start, end, _ = resolve_interval(self.settings, self.clock, period)
         return start, end
 
     @staticmethod
