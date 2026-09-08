@@ -29,6 +29,11 @@ class Settings:
     gemini_retry_jitter_ms: int = 200
     gemini_retry_max_elapsed_ms: int = 55000
     fallback_model: str = ""
+    calendar_client_id: str = ""
+    calendar_client_secret: str = field(default="", repr=False)
+    calendar_token_file_path: str = "./tokens/google_calendar.token"
+    calendar_redirect_uri: str = "http://localhost:8000/api/calendar/callback"
+    calendar_ids: tuple[str, ...] = ("primary",)
 
     def __post_init__(self):
         if len(self.api_token) < 32:
@@ -88,6 +93,20 @@ class Settings:
                 os.getenv("GEMINI_RETRY_MAX_ELAPSED_MS", "55000")
             ),
             fallback_model=os.getenv("GEMINI_FALLBACK_MODEL", ""),
+            calendar_client_id=os.getenv("CALENDAR_CLIENT_ID")
+            or os.getenv("GOOGLE_CLIENT_ID", ""),
+            calendar_client_secret=os.getenv("CALENDAR_CLIENT_SECRET")
+            or os.getenv("GOOGLE_CLIENT_SECRET", ""),
+            calendar_token_file_path=os.getenv("CALENDAR_TOKEN_FILE_PATH")
+            or "./tokens/google_calendar.token",
+            calendar_redirect_uri=os.getenv("CALENDAR_REDIRECT_URI")
+            or "http://localhost:8000/api/calendar/callback",
+            calendar_ids=tuple(
+                part.strip()
+                for part in os.getenv("CALENDAR_IDS", "").split(",")
+                if part.strip()
+            )
+            or ("primary",),
         )
 
 

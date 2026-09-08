@@ -5,11 +5,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
+      args:
+        API_UID: "${API_UID:-10001}"
     image: fitbit-ai-api:latest
     restart: unless-stopped
     read_only: true
+    # Must match the collector's appuser: docker compose exec fitbit-fetch-data id -u
+    user: "${API_UID:-10001}"
     tmpfs:
       - /tmp
+    volumes:
+      - ./tokens:/app/tokens
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -33,6 +39,11 @@ services:
       INFLUXDB_DATABASE: "${INFLUXDB_DATABASE:-FitbitHealthStats}"
       INFLUXDB_USERNAME: "${INFLUXDB_USERNAME:-fitbit_user}"
       INFLUXDB_PASSWORD: "${INFLUXDB_PASSWORD:-fitbit_password}"
+      CALENDAR_IDS: "${CALENDAR_IDS:-primary}"
+      CALENDAR_CLIENT_ID: "${CALENDAR_CLIENT_ID:-}"
+      CALENDAR_CLIENT_SECRET: "${CALENDAR_CLIENT_SECRET:-}"
+      CALENDAR_TOKEN_FILE_PATH: /app/tokens/google_calendar.token
+      CALENDAR_REDIRECT_URI: "${CALENDAR_REDIRECT_URI:-http://localhost:8000/api/calendar/callback}"
     depends_on:
       influxdb:
         condition: service_healthy

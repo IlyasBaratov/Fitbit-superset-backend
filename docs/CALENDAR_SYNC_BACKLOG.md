@@ -304,7 +304,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     `docker compose config --quiet` passes in the cloud image (the Docker CLI is present; config
     validation needs no daemon). 204 → 207 tests. The cloud image still needs `pip install cffi`
     on top of `requirements-dev.txt` (see C1.1).
-- [ ] **C1.8 Connect and callback API** — blocked by: C1.3
+- [x] **C1.8 Connect and callback API** — blocked by: C1.3
   - Files: `app/core/config.py` (API `Settings`), `app/api/routes/calendar.py` (new),
     `app/api/calendar_connect.py` (new: nonce store + orchestration), `app/api/main.py`
     (router, `app.state.calendar_connect`), `compose.yml` (`ai-api`), `Dockerfile.api`,
@@ -332,7 +332,24 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     503 when unconfigured; secret never appears in any response. Docs: connect walkthrough
     (`curl -H "Authorization: Bearer $AI_API_TOKEN" http://127.0.0.1:8000/api/calendar/connect`,
     open the URL, land on the callback). `[manual-verify]` uid alignment in C5.3.
-  - Notes:
+  - Notes: done: API `Settings` gains `calendar_client_id` / `calendar_client_secret`
+    (`GOOGLE_*` fallback, `repr=False`, in the `configure_logging` secrets tuple),
+    `calendar_token_file_path`, `calendar_redirect_uri` and `calendar_ids`, all optional.
+    `app/api/calendar_connect.py` holds `CalendarConnectService`: `begin()` mints a
+    `secrets.token_urlsafe(32)` nonce (10-minute TTL, at most 10 pending, oldest evicted) and
+    returns the D2 read-only authorization URL; `complete(state, code, error)` rejects an
+    unknown, expired, replayed or Google-denied response with `400 CALENDAR_CONNECT_REJECTED`
+    before any exchange, then exchanges the code and saves through
+    `GoogleCalendarTokenManager._save` (atomic, `0600`) via a small `CalendarTokenSettings`
+    adapter — the API `Settings` stays free of collector fields. Unconfigured → `503
+    CALENDAR_NOT_CONFIGURED` on both endpoints. `app/api/routes/calendar.py` adds `GET
+    /api/calendar/connect` (bearer) and the bearer-less `GET /api/calendar/callback` (plain
+    text, no token, code or secret in any response); `app/api/main.py` builds the service in
+    the lifespan with its session closed on the same `ExitStack`. Compose gives `ai-api` the
+    read-write `./tokens` mount, the calendar env vars and `user: "${API_UID:-10001}"`, with
+    `Dockerfile.api` taking a matching `ARG API_UID`; `docker compose config --quiet` passes.
+    207 → 213 tests. The cloud image still needs `pip install cffi` on top of
+    `requirements-dev.txt` (see C1.1).
 
 ### C2 Read API: events with vitals
 

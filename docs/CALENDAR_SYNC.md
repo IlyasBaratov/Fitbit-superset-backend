@@ -9,7 +9,8 @@ Google. Full design and progress: `docs/CALENDAR_SYNC_BACKLOG.md`.
 1. **Google Cloud.** Enable the *Google Calendar API* in the project owning the OAuth client
    you intend to use. If the consent screen is still in *Testing*, refresh tokens expire after
    seven days — switch it to *In production* (personal use needs no verification). Add the
-   redirect URI `http://localhost:8765/` to the client for the CLI flow below.
+   redirect URI `http://localhost:8765/` to the client for the CLI flow below, and
+   `http://localhost:8000/api/calendar/callback` for the API flow.
 2. **Credentials.** Put them in `.env` as `CALENDAR_CLIENT_ID` and `CALENDAR_CLIENT_SECRET`;
    both fall back to `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` when left empty.
    `CALENDAR_IDS` is a comma-separated list of calendar ids (default `primary`), each taken
@@ -38,6 +39,45 @@ Google. Full design and progress: `docs/CALENDAR_SYNC_BACKLOG.md`.
 
 Re-running the script re-authorizes and overwrites the token file. To disconnect, delete the
 token file; the worker notices on its next cycle.
+
+## Connecting through the API
+
+The API can run the same flow without a shell on the host, which is the usual route when the
+stack runs under Compose (D13). Register `http://localhost:8000/api/calendar/callback` as a
+redirect URI on the OAuth client, set `CALENDAR_CLIENT_ID` / `CALENDAR_CLIENT_SECRET` (both
+fall back to `GOOGLE_*`) and, if the API is not reached at `localhost:8000`,
+`CALENDAR_REDIRECT_URI`.
+
+```bash
+curl -H "Authorization: Bearer $AI_API_TOKEN" http://127.0.0.1:8000/api/calendar/connect
+# {"authorization_url":"https://accounts.google.com/o/oauth2/v2/auth?...","expires_in":600}
+```
+
+Open the returned URL in a browser and grant the read-only scope. Google redirects back to
+`/api/calendar/callback`, which answers with the plain text *Google Calendar connected. You can
+close this tab.* and writes `CALENDAR_TOKEN_FILE_PATH` (mode `0600`). The collector picks the
+new file up on its next cycle; no restart is needed.
+
+| Endpoint | Auth | Purpose |
+| --- | --- | --- |
+| `GET /api/calendar/connect` | bearer | Returns an authorization URL bound to a single-use `state` nonce (10 minutes, at most 10 pending, oldest evicted) |
+| `GET /api/calendar/callback?state=&code=` | none — Google redirects the browser here | Validates the nonce, exchanges the code, writes the token file |
+
+Errors: `503 CALENDAR_NOT_CONFIGURED` when the client credentials are missing;
+`400 CALENDAR_CONNECT_REJECTED` for an unknown, expired, replayed or denied authorization.
+Neither the authorization code nor any token or client secret appears in a response or a log
+line.
+
+Both containers must be able to read the `0600` token file, so the API runs as the collector's
+uid:
+
+```bash
+docker compose exec fitbit-fetch-data id -u     # e.g. 1000
+echo 'API_UID=1000' >> .env                     # default 10001
+docker compose up -d --build ai-api
+```
+
+`ai-api` stays `read_only: true`; the bind-mounted `./tokens` is its only writable path.
 
 ## Running it with Docker
 
@@ -86,6 +126,11 @@ docker compose exec influxdb influx -database FitbitHealthStats \
   *Testing*. Switch it to *In production* (see step 1 of Setup).
 - **HTTP 404 for a calendar id** — the id in `CALENDAR_IDS` is wrong or not shared with the
   authorized account.
+- **`redirect_uri_mismatch` from Google, or `400 CALENDAR_CONNECT_REJECTED`** — the OAuth
+  client has no redirect URI matching `CALENDAR_REDIRECT_URI`, or the browser was sent an
+  authorization URL older than ten minutes. Call `GET /api/calendar/connect` again.
+- **The API cannot read or write the token file** — its uid does not match the collector's.
+  Compare `docker compose exec fitbit-fetch-data id -u` with `API_UID` and rebuild `ai-api`.
 
 ## Environment
 
@@ -98,6 +143,8 @@ docker compose exec influxdb influx -database FitbitHealthStats \
 | `CALENDAR_SYNC_DAYS_BACK` | `7` | Days before today in the rolling re-sync window |
 | `CALENDAR_SYNC_DAYS_AHEAD` | `1` | Days after today in the rolling re-sync window |
 | `CALENDAR_API_BASE_URL` | `https://www.googleapis.com/calendar/v3` | Calendar API root |
+| `CALENDAR_REDIRECT_URI` | `http://localhost:8000/api/calendar/callback` | Redirect target of the API connect flow |
+| `API_UID` | `10001` | uid the API container builds and runs as; align it with the collector |
 
 ## Privacy
 
