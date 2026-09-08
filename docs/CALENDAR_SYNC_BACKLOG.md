@@ -441,7 +441,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     `event_vitals` and the contract fails loudly instead of leaking a field.
     `docs/CALENDAR_SYNC.md` gains an Endpoints section. 237 → 244 tests. The cloud image still
     needs `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
-- [ ] **C2.4 Connection status + disconnect** — blocked by: C1.8, C2.1
+- [x] **C2.4 Connection status + disconnect** — blocked by: C1.8, C2.1
   - Files: `app/api/routes/calendar.py`, `app/api/calendar_connect.py`,
     `app/api/schemas/calendar.py`, `docs/CALENDAR_SYNC.md`, `tests/test_calendar_connect_routes.py`.
   - Do: `GET /api/calendar/status` (bearer) → `{connected: bool (token file exists with a
@@ -451,7 +451,20 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     `CALENDAR_NOT_CONNECTED` when no file. Worker notices the deletion on its next cycle (D2).
   - Done when: tests: status reflects file presence and Influx row; disconnect deletes the
     file, calls revoke once, is idempotent-safe (second call 404); no secrets in responses.
-  - Notes:
+  - Notes: done: `CalendarConnectService` gains `status(repository)` and `disconnect()`.
+    `status` reads the token file itself (`connected` = a non-empty `refresh_token` in it,
+    `token_saved_at` = its `saved_at_utc`) and never raises: it answers `configured: false`
+    on an unconfigured server instead of `503`, and reports `last_event_start: null` — from
+    `latest_calendar_event()`'s point time, the event start per the data contract — when
+    nothing is synced yet or InfluxDB is unreadable, so the connection state never depends on
+    the store. `disconnect()` is `404 CALENDAR_NOT_CONNECTED` without a token file, otherwise
+    revokes the refresh token best effort (a refusal still disconnects) and unlinks the file;
+    the worker notices on its next cycle (D2). `GET /api/calendar/status` (bearer, strict
+    `CalendarStatusResponse`) takes the repository through the existing `get_influx`
+    dependency, so `app/api/main.py` is untouched, and `DELETE /api/calendar/connection`
+    (bearer) answers `204` with no body. Neither response can carry a token or the client
+    secret. `docs/CALENDAR_SYNC.md` documents both in the connect table. 244 → 247 tests.
+    The cloud image still needs `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
 
 ### C3 Deterministic insights
 

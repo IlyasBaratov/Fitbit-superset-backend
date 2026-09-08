@@ -46,3 +46,15 @@ class CalendarEventsResponse(BaseModel):
     timezone: str
     bucket_minutes: int
     events: list[CalendarEvent]
+
+
+class CalendarStatusResponse(BaseModel):
+    """The connection itself; never the token, the client secret or the person's events."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    connected: bool
+    configured: bool
+    calendar_ids: list[str]
+    token_saved_at: AwareDatetime | None
+    last_event_start: AwareDatetime | None
+    redirect_uri: str

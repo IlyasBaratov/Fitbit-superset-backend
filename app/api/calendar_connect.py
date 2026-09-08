@@ -5,15 +5,17 @@ The API runs one uvicorn worker, so pending nonces live in this process only.
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import json
 from pathlib import Path
 import secrets
 import requests
-from app.core.exceptions import AuthenticationError
+from app.core.exceptions import AuthenticationError, DataUnavailable
 from app.errors import APIError
 from app.providers.google_calendar.auth import GoogleCalendarTokenManager
 from app.providers.google_calendar.connect import (
     authorization_url,
     exchange_code,
+    revoke,
     token_record,
 )
 
@@ -88,9 +90,56 @@ class CalendarConnectService:
             raise self._rejected() from None
         self._store(token_record(payload))
 
+    def status(self, repository=None) -> dict:
+        """Connection state; it stays answerable while unconfigured or while Influx is down."""
+        record = self._token()
+        return {
+            "connected": bool(_refresh_token(record)),
+            "configured": self.configured,
+            "calendar_ids": list(self.settings.calendar_ids),
+            "token_saved_at": _timestamp(record.get("saved_at_utc")),
+            "last_event_start": self._last_event_start(repository),
+            "redirect_uri": self.settings.calendar_redirect_uri,
+        }
+
+    def disconnect(self) -> None:
+        """Revoking is best effort (D2); removing the file is what actually disconnects."""
+        path = Path(self.settings.calendar_token_file_path or ".")
+        if not path.is_file():
+            raise APIError(
+                "CALENDAR_NOT_CONNECTED",
+                "No Google Calendar connection is stored on this server.",
+                404,
+            )
+        token = _refresh_token(self._token())
+        if token:
+            revoke(self.session, token, EXCHANGE_TIMEOUT_SECONDS)
+        path.unlink(missing_ok=True)
+
     def close(self) -> None:
         if self._owns_session:
             self.session.close()
+
+    @staticmethod
+    def _last_event_start(repository):
+        """Informational only: an unreadable store means no timestamp, not a failed status."""
+        try:
+            row = repository.latest_calendar_event() if repository is not None else None
+        except (DataUnavailable, AttributeError):
+            return None
+        return _timestamp((row or {}).get("time"))
+
+    def _token(self) -> dict:
+        """The stored record, or an empty one when the file is absent or unreadable."""
+        try:
+            record = json.loads(
+                Path(self.settings.calendar_token_file_path or ".").read_text(
+                    encoding="utf-8"
+                )
+            )
+        except (OSError, ValueError):
+            return {}
+        return record if isinstance(record, dict) else {}
 
     def _store(self, record):
         manager = GoogleCalendarTokenManager(self._token_settings(), self.session)
@@ -126,3 +175,17 @@ class CalendarConnectService:
             "The authorization response was rejected; start again at /api/calendar/connect.",
             400,
         )
+
+
+def _refresh_token(record) -> str:
+    token = record.get("refresh_token")
+    return token.strip() if isinstance(token, str) else ""
+
+
+def _timestamp(value):
+    """Stored ISO 8601 with an offset; anything else is reported as no timestamp."""
+    try:
+        moment = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+    return moment.astimezone(timezone.utc) if moment.tzinfo is not None else None

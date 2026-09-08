@@ -1,4 +1,4 @@
-"""Connect and callback endpoints for the read-only calendar scope (D13)."""
+"""Connect, callback, status and disconnect endpoints for the calendar scope (D13)."""
 
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -15,6 +15,7 @@ from app.api.calendar_connect import (
 )
 from app.api.main import create_app
 from app.core.config import Settings
+from app.core.exceptions import DataUnavailable
 from app.errors import APIError
 
 SECRET = "calendar-client-secret"
@@ -55,6 +56,16 @@ def _begin(client, cfg):
     )
     assert response.status_code == 200
     return response
+
+
+def _bearer(cfg):
+    return {"Authorization": "Bearer " + cfg.api_token}
+
+
+def _connect(client, cfg):
+    """Walk the full flow so that the token file exists exactly as the API writes it."""
+    state = _state_of(_begin(client, cfg).json())
+    assert client.get(f"/api/calendar/callback?state={state}&code=granted").status_code == 200
 
 
 def test_connect_requires_a_bearer_token_and_offers_read_only_access(setup):
@@ -156,6 +167,76 @@ def test_an_unconfigured_server_answers_503_on_both_endpoints(setup):
         callback = client.get("/api/calendar/callback?state=x&code=y")
         assert callback.status_code == 503
         assert callback.json()["error"] == "CALENDAR_NOT_CONFIGURED"
+
+
+def test_status_reports_configuration_connection_and_the_newest_stored_event(setup):
+    cfg, db, gemini, clock = setup
+    db.latest_calendar_event.return_value = {
+        "time": "2026-03-09T10:00:00Z",
+        "EventId": "event-1",
+    }
+    session = _exchange_session(
+        {"access_token": "calendar-access", "refresh_token": "calendar-refresh"}
+    )
+    app = create_app(cfg, db, gemini, clock)
+    with TestClient(app) as client:
+        app.state.calendar_connect.session = session
+        assert client.get("/api/calendar/status").status_code == 401
+        response = client.get("/api/calendar/status", headers=_bearer(cfg))
+        assert response.status_code == 200
+        body = response.json()
+        assert (body["connected"], body["configured"]) == (False, True)
+        assert body["calendar_ids"] == ["primary"]
+        assert body["token_saved_at"] is None
+        assert body["last_event_start"] == "2026-03-09T10:00:00Z"
+        assert body["redirect_uri"] == cfg.calendar_redirect_uri
+        _connect(client, cfg)
+        connected = client.get("/api/calendar/status", headers=_bearer(cfg))
+        assert connected.json()["connected"] is True
+        assert connected.json()["token_saved_at"] is not None
+        for phrase in ("calendar-access", "calendar-refresh", SECRET):
+            assert phrase not in connected.text
+
+
+def test_status_answers_while_unconfigured_and_while_storage_is_down(setup):
+    cfg, db, gemini, clock = setup
+    db.latest_calendar_event.side_effect = DataUnavailable("secret")
+    cfg = replace(cfg, calendar_client_id="", calendar_client_secret="")
+    with TestClient(create_app(cfg, db, gemini, clock)) as client:
+        response = client.get("/api/calendar/status", headers=_bearer(cfg))
+        assert response.status_code == 200
+        body = response.json()
+        assert (body["configured"], body["connected"]) == (False, False)
+        assert body["last_event_start"] is None
+        assert "secret" not in response.text
+
+
+def test_disconnect_revokes_the_token_removes_the_file_and_is_then_not_found(setup):
+    cfg, db, gemini, clock = setup
+    db.latest_calendar_event.return_value = None
+    session = _exchange_session(
+        {"access_token": "calendar-access", "refresh_token": "calendar-refresh"}
+    )
+    token_file = Path(cfg.calendar_token_file_path)
+    app = create_app(cfg, db, gemini, clock)
+    with TestClient(app) as client:
+        app.state.calendar_connect.session = session
+        assert client.delete("/api/calendar/connection").status_code == 401
+        missing = client.delete("/api/calendar/connection", headers=_bearer(cfg))
+        assert missing.status_code == 404
+        assert missing.json()["error"] == "CALENDAR_NOT_CONNECTED"
+        _connect(client, cfg)
+        assert token_file.exists()
+        session.post.reset_mock()
+        removed = client.delete("/api/calendar/connection", headers=_bearer(cfg))
+        assert removed.status_code == 204
+        assert removed.text == ""
+        assert not token_file.exists()
+        assert session.post.call_count == 1
+        assert session.post.call_args.args[0] == "https://oauth2.googleapis.com/revoke"
+        assert session.post.call_args.kwargs["data"] == {"token": "calendar-refresh"}
+        assert client.delete("/api/calendar/connection", headers=_bearer(cfg)).status_code == 404
+        assert client.get("/api/calendar/status", headers=_bearer(cfg)).json()["connected"] is False
 
 
 def test_pending_states_expire_and_the_oldest_is_evicted(setup):

@@ -37,8 +37,9 @@ Google. Full design and progress: `docs/CALENDAR_SYNC_BACKLOG.md`.
    connected*: calendar sync is skipped and health collection is unaffected.
 5. **Enable sync.** Set `CALENDAR_SYNC_ENABLED=true` and restart the collector.
 
-Re-running the script re-authorizes and overwrites the token file. To disconnect, delete the
-token file; the worker notices on its next cycle.
+Re-running the script re-authorizes and overwrites the token file. To disconnect, call
+`DELETE /api/calendar/connection` or delete the token file; the worker notices on its next
+cycle.
 
 ## Connecting through the API
 
@@ -62,11 +63,31 @@ new file up on its next cycle; no restart is needed.
 | --- | --- | --- |
 | `GET /api/calendar/connect` | bearer | Returns an authorization URL bound to a single-use `state` nonce (10 minutes, at most 10 pending, oldest evicted) |
 | `GET /api/calendar/callback?state=&code=` | none — Google redirects the browser here | Validates the nonce, exchanges the code, writes the token file |
+| `GET /api/calendar/status` | bearer | Reports the connection without exposing it |
+| `DELETE /api/calendar/connection` | bearer | Revokes the refresh token at Google and removes the token file, `204` |
 
 Errors: `503 CALENDAR_NOT_CONFIGURED` when the client credentials are missing;
-`400 CALENDAR_CONNECT_REJECTED` for an unknown, expired, replayed or denied authorization.
+`400 CALENDAR_CONNECT_REJECTED` for an unknown, expired, replayed or denied authorization;
+`404 CALENDAR_NOT_CONNECTED` when there is no stored connection to remove.
 Neither the authorization code nor any token or client secret appears in a response or a log
 line.
+
+```bash
+curl -H "Authorization: Bearer $AI_API_TOKEN" http://127.0.0.1:8000/api/calendar/status
+# {"connected":true,"configured":true,"calendar_ids":["primary"],
+#  "token_saved_at":"2026-03-09T12:00:00Z","last_event_start":"2026-03-09T10:00:00Z",
+#  "redirect_uri":"http://localhost:8000/api/calendar/callback"}
+
+curl -X DELETE -H "Authorization: Bearer $AI_API_TOKEN" \
+  http://127.0.0.1:8000/api/calendar/connection      # 204, no body
+```
+
+`connected` means the token file holds a refresh token, `configured` that the server has client
+credentials and a token path — status answers even when it has neither, so it can say so.
+`last_event_start` is the start of the newest stored `Calendar Events` point, or `null` when
+nothing has been synced yet or InfluxDB cannot be read; the connection state never depends on
+the store. Disconnecting revokes best effort — a revocation Google refuses still removes the
+file — and the collector logs *not connected* on its next cycle instead of stopping (D2).
 
 Both containers must be able to read the `0600` token file, so the API runs as the collector's
 uid:
@@ -118,6 +139,9 @@ docker compose exec influxdb influx -database FitbitHealthStats \
 | --- | --- | --- |
 | `GET /api/health/calendar?period=7d` | bearer | Stored `Calendar Events` rows, unprocessed (see docs/HEALTH_API.md) |
 | `GET /api/calendar/events?period=7d` | bearer | Readable events with the heart-rate response measured around each one |
+
+The connection endpoints — `connect`, `callback`, `status` and `connection` — are listed under
+[Connecting through the API](#connecting-through-the-api).
 
 `/api/calendar/events` follows the health period rules: `?period=7d`, default
 `AI_DEFAULT_ANALYSIS_DAYS`, maximum `AI_MAX_ANALYSIS_DAYS`, whole local days up to now, and no
