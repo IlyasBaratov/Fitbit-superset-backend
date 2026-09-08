@@ -468,7 +468,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
 
 ### C3 Deterministic insights
 
-- [ ] **C3.1 Daily load + correlations** — blocked by: C2.2
+- [x] **C3.1 Daily load + correlations** — blocked by: C2.2
   - Files: `app/calendar/insights.py`, `tests/test_calendar_insights.py`.
   - Do: `daily_load(events, zone)` per local date: `event_count`, `meeting_count`
     (attendees ≥ 1), `meeting_minutes`, `event_minutes`, `back_to_back_count` (gap ≤ 5 min),
@@ -482,7 +482,27 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     `app.ai.analytics.analyze()["metrics"][name]["daily"]` — reuse, never re-derive.
   - Done when: tests with 30 synthetic days: known `r`, next-day shift, insufficient-data
     path, tercile math.
-  - Notes:
+  - Notes: done: `app/calendar/insights.py` (pure, same rule as `vitals.py` — it reuses
+    `average`/`number`/`percent` from `app.ai.analytics` and `event_window` from
+    `app.calendar.vitals`, nothing else) adds `daily_load(events, zone)` keyed by ISO local
+    date like an `analyze()` series: `event_count`, `meeting_count` /
+    `meeting_minutes` (`attendees >= MIN_MEETING_ATTENDEES`, an absent count is a personal
+    block), `event_minutes`, `back_to_back_count` (gap `<= BACK_TO_BACK_GAP_MINUTES`, so
+    overlaps count too) and `first_event_hour` / `last_event_hour` as fractional local hours
+    of the first and last **start**. A day is the local date of the event's start, so a
+    23:30 UTC event belongs to the next Berlin day. `daily_series(metrics)` lifts
+    `analyze()["metrics"][name]["daily"]` for the eight correlated metrics (never
+    re-derived), and `correlate` / `tercile_comparison` share one pairing helper, both
+    reporting `same_day` and `next_day` per metric — sleep, HRV and resting heart rate are
+    next-morning measurements (D7), and a tercile on same-day sleep would compare a busy day
+    against the night before it. `correlate` → `{r, n, insufficient_data}` with
+    `n < MIN_CORRELATION_DAYS` short-circuited and a metric that never moves reported as
+    `r: null` (`statistics.correlation` refuses a constant series). `tercile_comparison`
+    sorts the pairs by meeting minutes, takes `len // 3` from each end (both thirds' metric
+    and meeting-minute means, `difference`, `percent`) and reports `insufficient_data` below
+    `MIN_TERCILE_DAYS`; both branches carry the same keys, so the C3.3 schema cannot drift.
+    Knob constants carry `# ponytail:` comments. 247 → 261 tests. The cloud image still needs
+    `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
 - [ ] **C3.2 Series, time-of-day and top events** — blocked by: C2.2
   - Files: `app/calendar/insights.py`, `tests/test_calendar_insights.py`.
   - Do: `series_summary(events_with_vitals)`: group by `recurring_event_id`, else normalized
