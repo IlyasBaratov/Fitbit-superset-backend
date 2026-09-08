@@ -377,7 +377,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     `GET /api/health/calendar` through the existing route factory; `docs/HEALTH_API.md` gains the
     route row plus the person-keyed identity note. 213 → 223 tests. The cloud image still needs
     `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
-- [ ] **C2.2 Pure per-event vitals** — blocked by: none
+- [x] **C2.2 Pure per-event vitals** — blocked by: none
   - Files: `app/calendar/__init__.py`, `app/calendar/vitals.py`, `tests/test_calendar_vitals.py`.
   - Do: `bucket_minutes(days)` (D6). `usable_events(rows)`: dedupe by `EventId` keeping max
     `updated`; drop `cancelled`, `isAllDay`, `transparent`, duration < `MIN_EVENT_MINUTES`.
@@ -392,7 +392,22 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     `CONTEXT_MINUTES=30`.
   - Done when: tests on synthetic buckets: exact weighted mean, boundary buckets, confound
     flag both ways, low coverage → `None`, dedupe keeps the newest row and drops cancelled.
-  - Notes:
+  - Notes: done: `app/calendar/vitals.py` (new pure package, no I/O — it reuses `number` and
+    `percent` from `app.ai.analytics` and nothing else from the app) adds `bucket_minutes(days)`
+    (7d → 1m, 30d → 3m, 90d → 7m, every period ≤ 190 d under the 20 000-row cap),
+    `usable_events(rows)` (dedupe by `EventId` keeping the newest `updated` **before** filtering,
+    so a newer cancellation removes the event instead of resurrecting its stale row; then drops
+    cancelled, all-day, `transparent` and sub-`MIN_EVENT_MINUTES` events, ordered by start) and
+    `event_vitals(event, hr_buckets, step_buckets, workouts, resting_hr, bucket_minutes=1)`
+    returning `(vitals | None, notes)`. A bucket counts for the window holding its midpoint —
+    hence the extra `bucket_minutes` argument, which the read layer's `GROUP BY time()` width
+    supplies and cannot be inferred from a row. `coverage_pct` = covered ÷ expected buckets
+    (capped at 100); below `MIN_COVERAGE_PCT` the vitals are `None` plus the coverage note.
+    `steps` stays `None` when no step bucket overlaps (no data ≠ zero steps), so
+    `movement_confounded` then rests on an overlapping `Activity Records` row alone. Event and
+    workout spans share one `startTime`/`endTime`-then-duration helper. Knob constants carry the
+    `# ponytail:` comments the item asked for. 223 → 237 tests. The cloud image still needs
+    `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
 - [ ] **C2.3 `GET /api/calendar/events`** — blocked by: C2.1, C2.2
   - Files: `app/api/schemas/calendar.py`, `app/api/calendar_service.py`,
     `app/api/routes/calendar.py`, `app/api/main.py` (router + `app.state.calendar`),
