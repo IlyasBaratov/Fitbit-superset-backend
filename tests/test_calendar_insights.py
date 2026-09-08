@@ -5,11 +5,16 @@ import pytest
 
 from app.calendar.insights import (
     MIN_CORRELATION_DAYS,
+    MIN_SERIES_OCCURRENCES,
     MIN_TERCILE_DAYS,
+    TOP_EVENT_COUNT,
     correlate,
     daily_load,
     daily_series,
+    series_summary,
     tercile_comparison,
+    time_of_day,
+    top_events,
 )
 
 ZONE = "Europe/Berlin"
@@ -178,6 +183,181 @@ def test_terciles_shift_with_the_metric_like_the_correlations():
     assert result["next_day"]["days"] == 4
     assert result["same_day"]["days"] == 3
     assert result["same_day"]["insufficient_data"] is True
+
+
+def vitals(elevation=10.0, recovery=-2.0, confounded=False, mean_hr=80.0):
+    """An `event_vitals` result, as the read service hands it to the insights layer."""
+    return {
+        "mean_hr": mean_hr,
+        "max_hr": mean_hr + 10,
+        "sample_count": 12,
+        "coverage_pct": 100,
+        "hr_vs_resting_pct": elevation,
+        "steps": 40,
+        "steps_per_minute": 2,
+        "movement_confounded": confounded,
+        "pre30_mean_hr": 65,
+        "post30_mean_hr": mean_hr + recovery,
+        "recovery_delta": recovery,
+    }
+
+
+def measured(
+    start,
+    elevation=10.0,
+    summary="Weekly sync",
+    recurring="",
+    minutes=60,
+    attendees=3,
+    event_id=None,
+    **overrides,
+):
+    """A stored event row carrying the vitals computed for it, or `None` when unreadable."""
+    row = event(start, minutes=minutes, attendees=attendees, event_id=event_id)
+    row["summary"] = summary
+    row["recurringEventId"] = recurring
+    row["vitals"] = vitals(elevation, **overrides) if elevation is not None else None
+    return row
+
+
+def test_series_groups_instances_of_one_recurring_event():
+    rows = [
+        measured("2026-09-01T07:00:00+00:00", 10, summary="Standup", recurring="r1"),
+        measured("2026-09-02T07:00:00+00:00", 20, summary="Standup (moved)", recurring="r1"),
+        measured("2026-09-03T07:00:00+00:00", 30, summary="Standup", recurring="r1"),
+    ]
+    assert series_summary(rows) == [
+        {
+            "title": "Standup",
+            "occurrences": 3,
+            "with_vitals": 3,
+            "mean_hr_vs_resting_pct": 20,
+            "mean_recovery_delta": -2,
+            "confounded_count": 0,
+        }
+    ]
+
+
+def test_series_without_a_recurring_id_group_on_the_normalized_summary():
+    rows = [
+        measured("2026-09-01T07:00:00+00:00", 10, summary="Weekly  Sync"),
+        measured("2026-09-02T07:00:00+00:00", 20, summary="  weekly sync "),
+        measured("2026-09-03T07:00:00+00:00", 30, summary="Retro"),
+    ]
+    result = series_summary(rows)
+    assert [(group["title"], group["occurrences"]) for group in result] == [
+        ("Weekly Sync", 2),
+        ("Retro", 1),
+    ]
+
+
+def test_untitled_one_off_events_stay_separate_groups():
+    rows = [
+        measured("2026-09-01T07:00:00+00:00", 10, summary="", event_id="e1"),
+        measured("2026-09-02T07:00:00+00:00", 20, summary="", event_id="e2"),
+    ]
+    assert [group["occurrences"] for group in series_summary(rows)] == [1, 1]
+
+
+def test_only_series_with_enough_usable_occurrences_are_ranked_by_elevation():
+    rows = [
+        measured(f"2026-09-0{day}T07:00:00+00:00", 5, summary="Standup", recurring="r1")
+        for day in range(1, MIN_SERIES_OCCURRENCES + 1)
+    ] + [
+        measured("2026-09-05T07:00:00+00:00", 50, summary="Board review", recurring="r2"),
+        measured("2026-09-06T07:00:00+00:00", 50, summary="Board review", recurring="r2"),
+    ]
+    # The steep pair sorts behind the ranked series despite the higher elevation.
+    assert [group["title"] for group in series_summary(rows)] == ["Standup", "Board review"]
+
+
+def test_series_ranking_puts_the_steepest_qualifying_group_first():
+    rows = [
+        measured(f"2026-09-0{day}T07:00:00+00:00", 5, summary="Standup", recurring="r1")
+        for day in range(1, 4)
+    ] + [
+        measured(f"2026-09-0{day}T12:00:00+00:00", 40, summary="Sales call", recurring="r2")
+        for day in range(1, 4)
+    ]
+    assert [group["title"] for group in series_summary(rows)] == ["Sales call", "Standup"]
+
+
+def test_series_counts_unmeasured_and_confounded_occurrences_separately():
+    rows = [
+        measured("2026-09-01T07:00:00+00:00", 10, summary="Standup", recurring="r1"),
+        measured("2026-09-02T07:00:00+00:00", 30, summary="Standup", recurring="r1", confounded=True),
+        measured("2026-09-03T07:00:00+00:00", None, summary="Standup", recurring="r1"),
+    ]
+    assert series_summary(rows) == [
+        {
+            "title": "Standup",
+            "occurrences": 3,
+            "with_vitals": 2,
+            "mean_hr_vs_resting_pct": 20,
+            "mean_recovery_delta": -2,
+            "confounded_count": 1,
+        }
+    ]
+
+
+def test_series_skips_rows_without_a_usable_window():
+    assert series_summary([{"EventId": "e1", "summary": "Broken"}]) == []
+    assert series_summary(None) == []
+
+
+def test_time_of_day_buckets_events_by_their_local_start_hour():
+    rows = [
+        measured("2026-09-01T07:00:00+00:00", 10),  # 09:00 Berlin
+        measured("2026-09-01T09:00:00+00:00", 20),  # 11:00 Berlin, still morning
+        measured("2026-09-01T11:00:00+00:00", 30),  # 13:00 Berlin
+        measured("2026-09-01T15:00:00+00:00", 40),  # 17:00 Berlin
+    ]
+    assert time_of_day(rows, ZONE) == {
+        "morning": {"mean_hr_vs_resting_pct": 15, "n": 2},
+        "afternoon": {"mean_hr_vs_resting_pct": 30, "n": 1},
+        "evening": {"mean_hr_vs_resting_pct": 40, "n": 1},
+    }
+
+
+def test_time_of_day_counts_only_events_with_an_elevation():
+    rows = [
+        measured("2026-09-01T07:00:00+00:00", None),  # no vitals at all
+        {**measured("2026-09-01T08:00:00+00:00", 10), "vitals": vitals(None)},
+    ]
+    assert time_of_day(rows, ZONE)["morning"] == {"mean_hr_vs_resting_pct": None, "n": 0}
+    assert time_of_day(None, ZONE)["evening"] == {"mean_hr_vs_resting_pct": None, "n": 0}
+
+
+def test_top_events_returns_the_steepest_events_without_movement():
+    rows = [
+        measured(f"2026-09-0{index}T07:00:00+00:00", index, event_id=f"e{index}")
+        for index in range(1, 8)
+    ]
+    rows.append(
+        measured("2026-09-08T07:00:00+00:00", 99, event_id="walk", confounded=True)
+    )
+    result = top_events(rows)
+    assert len(result) == TOP_EVENT_COUNT
+    assert [row["event_id"] for row in result] == ["e7", "e6", "e5", "e4", "e3"]
+    assert result[0] == {
+        "event_id": "e7",
+        "title": "Weekly sync",
+        "start": datetime.fromisoformat("2026-09-07T07:00:00+00:00"),
+        "duration_minutes": 60,
+        "attendees": 3,
+        "mean_hr": 80.0,
+        "hr_vs_resting_pct": 7,
+        "recovery_delta": -2.0,
+    }
+
+
+def test_top_events_ignores_events_without_vitals():
+    rows = [
+        measured("2026-09-01T07:00:00+00:00", None, event_id="e1"),
+        measured("2026-09-02T07:00:00+00:00", 5, event_id="e2"),
+    ]
+    assert [row["event_id"] for row in top_events(rows)] == ["e2"]
+    assert top_events(None) == []
 
 
 def test_load_and_correlations_line_up_end_to_end():

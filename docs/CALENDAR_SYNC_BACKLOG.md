@@ -503,7 +503,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     `MIN_TERCILE_DAYS`; both branches carry the same keys, so the C3.3 schema cannot drift.
     Knob constants carry `# ponytail:` comments. 247 → 261 tests. The cloud image still needs
     `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
-- [ ] **C3.2 Series, time-of-day and top events** — blocked by: C2.2
+- [x] **C3.2 Series, time-of-day and top events** — blocked by: C2.2
   - Files: `app/calendar/insights.py`, `tests/test_calendar_insights.py`.
   - Do: `series_summary(events_with_vitals)`: group by `recurring_event_id`, else normalized
     summary (lowercase, whitespace collapsed); per group `title`, `occurrences`, `with_vitals`,
@@ -511,7 +511,29 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     among groups with ≥ 3 usable occurrences. `time_of_day(...)`: morning < 12, afternoon
     12–17, evening ≥ 17 → mean elevation + `n`. `top_events(...)`: 5 highest non-confounded.
   - Done when: tests: grouping fallback, rank threshold, buckets, confounded excluded.
-  - Notes:
+  - Notes: done: `app/calendar/insights.py` (still pure) adds `series_summary(events)`,
+    `time_of_day(events, zone)` and `top_events(events, limit=TOP_EVENT_COUNT)`. All three take
+    the same input: stored `Calendar Events` rows, each carrying the `event_vitals` dict its
+    reader computed under a `"vitals"` key (`None` when the buckets did not cover the event) —
+    the shape `CalendarReadService._events` already holds per event, so C3.3 passes rows
+    straight through without a second vitals pass. Rows without a usable window are skipped
+    exactly as in `daily_load`. Grouping is `recurringEventId`, else the whitespace-collapsed
+    lowercase summary, else the event id alone, so untitled one-offs never clump together;
+    a group reports `title` (the first occurrence's summary, whitespace collapsed),
+    `occurrences`, `with_vitals`, `mean_hr_vs_resting_pct`, `mean_recovery_delta` and
+    `confounded_count`. Groups with `with_vitals >= MIN_SERIES_OCCURRENCES = 3` and a numeric
+    mean rank first by elevation (descending); the rest trail by how often they recur, so the
+    C3.3 "top 10" slice is always the ranked ones first — confounded occurrences stay in the
+    mean and are counted beside it, since one walking instance should not silently reshape a
+    series. `time_of_day` buckets on the **local** start hour (`morning < 12`, `afternoon`
+    12–17, `evening >= 17`) and reports `mean_hr_vs_resting_pct` plus the `n` backing it, so a
+    bucket without a single elevation reads `{null, 0}` rather than disappearing. `top_events`
+    drops events without vitals, without an elevation or flagged `movement_confounded`, then
+    returns the five steepest (ties by start) as `event_id`, `title`, `start` (aware UTC
+    datetime, ready for the strict `AwareDatetime` schema), `duration_minutes`, `attendees`,
+    `mean_hr`, `hr_vs_resting_pct`, `recovery_delta`. Knob constants carry `# ponytail:`
+    comments. 261 → 272 tests. The cloud image still needs `pip install cffi` on top of
+    `requirements-dev.txt` (see C1.1).
 - [ ] **C3.3 `GET /api/calendar/insights`** — blocked by: C2.3, C3.1, C3.2
   - Files: `app/api/routes/calendar.py`, `app/api/calendar_service.py`,
     `app/api/schemas/calendar.py`, `docs/CALENDAR_SYNC.md`, `tests/test_calendar_routes.py`.

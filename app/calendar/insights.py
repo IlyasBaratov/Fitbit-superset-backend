@@ -1,4 +1,4 @@
-"""Deterministic meeting load per day and how it lines up with daily metrics (D7, D8)."""
+"""Deterministic meeting load, recurring series and how they line up with metrics (D7, D8)."""
 
 from __future__ import annotations
 from collections import defaultdict
@@ -17,6 +17,14 @@ BACK_TO_BACK_GAP_MINUTES = 5
 MIN_CORRELATION_DAYS = 10
 # ponytail: a tercile thinner than this is a couple of bad nights, not a pattern.
 MIN_TERCILE_DAYS = 4
+# ponytail: a series read fewer times than this is one bad morning, not a habit.
+MIN_SERIES_OCCURRENCES = 3
+# ponytail: how many single events are worth naming before the list turns into a log.
+TOP_EVENT_COUNT = 5
+# Local hours where a morning turns into an afternoon and an afternoon into an evening.
+AFTERNOON_HOUR = 12
+EVENING_HOUR = 17
+PARTS_OF_DAY = ("morning", "afternoon", "evening")
 
 # Daily metrics a meeting load can plausibly move (D7).
 METRICS = (
@@ -71,6 +79,109 @@ def tercile_comparison(
 ) -> dict[str, dict]:
     """Each metric on the busiest third of days against the quietest third."""
     return _per_metric(load, daily_metrics, _terciles)
+
+
+def series_summary(events: Sequence[Row] | None) -> list[dict]:
+    """Repeating meetings, ranked by the elevation the ones read often enough carry."""
+    groups: dict[tuple, list] = defaultdict(list)
+    for row in _readable(events):
+        groups[_series_key(row)].append(row)
+    return sorted((_series(rows) for rows in groups.values()), key=_series_rank)
+
+
+def time_of_day(events: Sequence[Row] | None, zone: str) -> dict[str, dict]:
+    """Mean elevation of the events starting in each part of the local day."""
+    local = pytz.timezone(zone)
+    parts: dict[str, list] = {name: [] for name in PARTS_OF_DAY}
+    for row in _readable(events):
+        elevation = _elevation(row)
+        if number(elevation):
+            hour = event_window(row)[0].astimezone(local).hour
+            parts[_part_of_day(hour)].append(elevation)
+    return {
+        name: {"mean_hr_vs_resting_pct": average(values), "n": len(values)}
+        for name, values in parts.items()
+    }
+
+
+def top_events(events: Sequence[Row] | None, limit: int = TOP_EVENT_COUNT) -> list[dict]:
+    """The steepest single events whose reading movement did not spoil (D7)."""
+    rows = [
+        _top_event(row)
+        for row in _readable(events)
+        if number(_elevation(row)) and (row["vitals"].get("movement_confounded") is not True)
+    ]
+    rows.sort(key=lambda row: (-row["hr_vs_resting_pct"], row["start"]))
+    return rows[: max(0, int(limit))]
+
+
+def _readable(events: Sequence[Row] | None):
+    """Event rows carrying a usable window, each with its vitals dict or `None`."""
+    for row in events or []:
+        if isinstance(row, dict) and event_window(row) is not None:
+            vitals = row.get("vitals")
+            yield {**row, "vitals": vitals if isinstance(vitals, dict) else None}
+
+
+def _series_key(row: Row) -> tuple[str, str]:
+    """Instances of one recurrence first, then a repeated title, else the event alone."""
+    recurring = str(row.get("recurringEventId") or "").strip()
+    if recurring:
+        return ("recurrence", recurring)
+    title = " ".join(str(row.get("summary") or "").lower().split())
+    return ("title", title) if title else ("event", str(row.get("EventId") or ""))
+
+
+def _series(rows) -> dict:
+    ordered = sorted(rows, key=lambda row: event_window(row)[0])
+    measured = [row["vitals"] for row in ordered if row["vitals"] is not None]
+    return {
+        "title": next((title for title in map(_title, ordered) if title), ""),
+        "occurrences": len(ordered),
+        "with_vitals": len(measured),
+        "mean_hr_vs_resting_pct": average([v.get("hr_vs_resting_pct") for v in measured]),
+        "mean_recovery_delta": average([v.get("recovery_delta") for v in measured]),
+        "confounded_count": sum(1 for v in measured if v.get("movement_confounded") is True),
+    }
+
+
+def _series_rank(group) -> tuple:
+    """Series read often enough rank by elevation; the rest trail by how often they recur."""
+    elevation = group["mean_hr_vs_resting_pct"]
+    if group["with_vitals"] >= MIN_SERIES_OCCURRENCES and number(elevation):
+        return (0, -float(elevation), group["title"])
+    return (1, -float(group["occurrences"]), group["title"])
+
+
+def _top_event(row: Row) -> dict:
+    start, end = event_window(row)
+    vitals = row["vitals"]
+    return {
+        "event_id": str(row.get("EventId") or ""),
+        "title": _title(row),
+        "start": start,
+        "duration_minutes": round((end - start).total_seconds() / 60, 4),
+        "attendees": _attendees(row),
+        "mean_hr": vitals.get("mean_hr") if number(vitals.get("mean_hr")) else None,
+        "hr_vs_resting_pct": vitals["hr_vs_resting_pct"],
+        "recovery_delta": vitals.get("recovery_delta")
+        if number(vitals.get("recovery_delta"))
+        else None,
+    }
+
+
+def _elevation(row: Row):
+    return (row["vitals"] or {}).get("hr_vs_resting_pct")
+
+
+def _part_of_day(hour: int) -> str:
+    if hour < AFTERNOON_HOUR:
+        return "morning"
+    return "afternoon" if hour < EVENING_HOUR else "evening"
+
+
+def _title(row: Row) -> str:
+    return " ".join(str(row.get("summary") or "").split())
 
 
 def _per_metric(load, daily_metrics, summarize):
