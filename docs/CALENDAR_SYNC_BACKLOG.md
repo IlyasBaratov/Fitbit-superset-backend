@@ -353,7 +353,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
 
 ### C2 Read API: events with vitals
 
-- [ ] **C2.1 Read layer: buckets + calendar tags + raw route** — blocked by: C1.5
+- [x] **C2.1 Read layer: buckets + calendar tags + raw route** — blocked by: C1.5
   - Files: `app/storage/influx/queries.py`, `app/api/health_service.py`, `docs/HEALTH_API.md`,
     `tests/test_health_routes.py`, `tests/test_ai_influx.py`.
   - Do: `InfluxService.query(measurement, start, end, bucket="1h")`; intraday `GROUP BY
@@ -365,7 +365,18 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     ("Calendar Events",)` → `GET /api/health/calendar` exists through the existing route factory.
   - Done when: SQL assertions for bucket, calendar identity and tag columns; route test
     parametrization includes `calendar`; docs table row.
-  - Notes:
+  - Notes: done: `InfluxService.query` takes `bucket="1h"`, validated against
+    `[1-9][0-9]{0,2}m|1h` before anything is sent, and drives `GROUP BY time(<bucket>)` for the
+    intraday measurements (unchanged hourly default, so existing callers keep their SQL). A new
+    `_identity(measurement)` helper builds the `WHERE` identity once: `Calendar Events` filters on
+    `UserId` + `Provider = 'google_calendar'` only (no `DeviceId`, D4) and appends the tag columns
+    `CalendarId`, `EventId` to the stored field list, exactly as `Activity Records` appends
+    `ActivityName`. `latest_calendar_event()` and `latest_device_observation()` now share a
+    `_latest()` helper (`ORDER BY time DESC LIMIT 1`, newest row across tag sets, redacted
+    `DataUnavailable` on failure). `HEALTH_MEASUREMENTS["calendar"] = ("Calendar Events",)` gives
+    `GET /api/health/calendar` through the existing route factory; `docs/HEALTH_API.md` gains the
+    route row plus the person-keyed identity note. 213 → 223 tests. The cloud image still needs
+    `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
 - [ ] **C2.2 Pure per-event vitals** — blocked by: none
   - Files: `app/calendar/__init__.py`, `app/calendar/vitals.py`, `tests/test_calendar_vitals.py`.
   - Do: `bucket_minutes(days)` (D6). `usable_events(rows)`: dedupe by `EventId` keeping max

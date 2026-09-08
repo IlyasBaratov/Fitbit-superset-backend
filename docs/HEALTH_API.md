@@ -10,11 +10,14 @@ All routes require the existing `Authorization: Bearer <AI_API_TOKEN>` header. I
 | /api/health/workouts | Activity Records |
 | /api/health/spo2 | SPO2, SPO2_Intraday |
 | /api/health/body | height, weight, bmi |
+| /api/health/calendar | Calendar Events |
 | /api/devices | Latest Device Metadata and DeviceBatteryLevel observations |
 
 Health routes accept `?period=7d`; omitted periods use AI_DEFAULT_ANALYSIS_DAYS. Maximum is AI_MAX_ANALYSIS_DAYS (at most 90). The interval runs from midnight in the configured timezone on the first included day through now, with an inclusive start and exclusive end. Unknown query parameters are rejected. Devices accepts no query parameters and returns the latest stored observations regardless of age, including their timestamps.
 
 Health responses contain `start`, `end` (UTC timestamps), `timezone`, and `series`. Each series has `measurement`, `resolution` (`hourly` or `stored`), and `rows`; each row contains a UTC `timestamp` and `fields`. Intraday fields are sum, count, min and max. Other measurements retain the selected stored fields and identity-related activity/sleep fields. Absent measurements have empty row lists; no synthetic data is returned.
+
+Calendar rows are keyed by the person rather than by the wearable: they are filtered on USER_ID and the fixed provider `google_calendar`, so they survive a change of HEALTH_API_PROVIDER or DEVICE_ID, and each row carries its `CalendarId` and `EventId` alongside the stored event fields. Calendar rows are only present once calendar sync is connected and enabled (see docs/CALENDAR_SYNC.md).
 
 Device responses contain `device_id`, `provider`, and `observations`. Each observation contains `measurement`, `timestamp`, and available `fields`. Missing battery telemetry produces no battery observation.
 
