@@ -534,7 +534,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     `mean_hr`, `hr_vs_resting_pct`, `recovery_delta`. Knob constants carry `# ponytail:`
     comments. 261 → 272 tests. The cloud image still needs `pip install cffi` on top of
     `requirements-dev.txt` (see C1.1).
-- [ ] **C3.3 `GET /api/calendar/insights`** — blocked by: C2.3, C3.1, C3.2
+- [x] **C3.3 `GET /api/calendar/insights`** — blocked by: C2.3, C3.1, C3.2
   - Files: `app/api/routes/calendar.py`, `app/api/calendar_service.py`,
     `app/api/schemas/calendar.py`, `docs/CALENDAR_SYNC.md`, `tests/test_calendar_routes.py`.
   - Do: `?period=30d` (default `AI_DEFAULT_ANALYSIS_DAYS`, max `AI_MAX_ANALYSIS_DAYS`).
@@ -543,7 +543,23 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     (fixed strings: HR elevation is a stress proxy, not a measurement; correlation is not
     causation; movement, caffeine, illness confound HR; coverage gaps listed).
   - Done when: TestClient tests incl. empty data → 200 with empty sections; docs section.
-  - Notes:
+  - Notes: done: `CalendarReadService._events` split into `_readings` (stored rows carrying the
+    `event_vitals` dict and notes its reader computed) and the response mapping, so
+    `GET /api/calendar/insights` runs `daily_load`, `series_summary`, `time_of_day` and
+    `top_events` over exactly the rows `/api/calendar/events` already builds — one vitals pass,
+    no second read. `CalendarReadService.insights(period)` reuses `resolve_interval` (same period
+    rules, same health error codes) and takes the correlated daily series from
+    `analyze(fetch(INSIGHT_MEASUREMENTS, window.query_start, window.now), Window(days, ...))`,
+    never re-deriving them (C3.1); a period without a readable event issues no metric read at all
+    and answers `200` with empty sections. The response is the strict
+    `CalendarInsightsResponse`: `period` (`start`, `end`, `timezone`, `days`, `bucket_minutes`),
+    `days_with_events`, `daily_load[]` (the last `DAILY_LOAD_DAYS = 14` days with events),
+    `correlations{}` and `tercile_comparison{}` (both `same_day` + `next_day` per metric, in
+    separate `ShiftedCorrelation` / `ShiftedTerciles` models so the two cannot drift into each
+    other), `series[]` (top 10), `time_of_day{}`, `top_events[]` and `caveats[]` — three fixed
+    strings plus a count of the events heart rate could not cover. `docs/CALENDAR_SYNC.md` gains
+    the endpoint row and a field table. 272 → 277 tests. The cloud image still needs
+    `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
 
 ### C4 Gemini
 

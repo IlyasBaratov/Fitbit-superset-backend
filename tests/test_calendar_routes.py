@@ -187,3 +187,151 @@ def test_storage_failures_reuse_the_health_error_codes_without_details(setup):
             assert response.status_code == status
             assert response.json()["error"] == code
             assert "secret" not in response.text
+
+
+# --- C3.3 GET /api/calendar/insights -------------------------------------------------
+
+INSIGHT_DAYS = 19
+MEETING_HOUR = 18  # UTC; a local morning on both sides of the daylight-saving switch.
+
+
+def insight_rows():
+    """One growing meeting per day, a matching resting rate, and buckets covering both."""
+    first = datetime(2026, 2, 18, MEETING_HOUR, tzinfo=timezone.utc)
+    events, buckets, resting = [], [], []
+    for index in range(INSIGHT_DAYS):
+        begin = first + timedelta(days=index)
+        minutes = 30 + index
+        events.append(
+            event(
+                time=begin.isoformat(),
+                EventId=f"event-{index}",
+                startTime=begin.isoformat(),
+                endTime=(begin + timedelta(minutes=minutes)).isoformat(),
+                duration_seconds=minutes * 60,
+            )
+        )
+        buckets += [
+            {
+                "time": (begin + timedelta(minutes=step * 3)).isoformat(),
+                "sum": 300,
+                "count": 3,
+                "min": 100,
+                "max": 100,
+            }
+            for step in range(minutes // 3)
+        ]
+        resting.append({"time": begin.isoformat(), "value": float(50 + index)})
+    return events, buckets, resting
+
+
+def insights(client, cfg, query=""):
+    return client.get(
+        "/api/calendar/insights" + query,
+        headers={"Authorization": "Bearer " + cfg.api_token},
+    )
+
+
+def test_insights_require_a_bearer_token_and_reject_unknown_parameters(setup):
+    cfg, db, gemini, clock = setup
+    with TestClient(create_app(cfg, db, gemini, clock)) as client:
+        assert client.get("/api/calendar/insights").status_code == 401
+        assert insights(client, cfg, "?focus=calendar").status_code == 422
+        assert insights(client, cfg, "?period=91d").status_code == 422
+        assert insights(client, cfg, "?period=month").status_code == 422
+    gemini.generate.assert_not_called()
+
+
+def test_a_period_without_events_returns_empty_sections_and_reads_no_metrics(setup):
+    cfg, db, gemini, clock = setup
+    with TestClient(create_app(cfg, db, gemini, clock)) as client:
+        response = insights(client, cfg)
+        assert response.status_code == 200
+        body = response.json()
+    assert body["period"] == {
+        "start": "2026-03-03T08:00:00Z",
+        "end": "2026-03-09T12:00:00Z",
+        "timezone": cfg.timezone,
+        "days": 7,
+        "bucket_minutes": 1,
+    }
+    assert body["days_with_events"] == 0
+    assert (body["daily_load"], body["series"], body["top_events"]) == ([], [], [])
+    assert (body["correlations"], body["tercile_comparison"]) == ({}, {})
+    assert body["time_of_day"]["morning"] == {"mean_hr_vs_resting_pct": None, "n": 0}
+    assert body["caveats"]
+    assert [call.args[0] for call in db.query.call_args_list] == ["Calendar Events"]
+    db.fetch.assert_not_called()
+
+
+def test_insights_report_load_series_and_correlations_over_the_period(setup):
+    cfg, db, gemini, clock = setup
+    events, buckets, resting = insight_rows()
+    db.query.side_effect = stored(calendar=events, hr=buckets, resting=resting)
+    db.fetch.return_value = {"RestingHR": resting}
+    with TestClient(create_app(cfg, db, gemini, clock)) as client:
+        body = insights(client, cfg, "?period=30d").json()
+
+    assert body["period"]["days"] == 30 and body["period"]["bucket_minutes"] == 3
+    assert body["days_with_events"] == INSIGHT_DAYS
+    assert len(body["daily_load"]) == 14  # the last fortnight only
+    assert body["daily_load"][-1] == {
+        "date": "2026-03-08",
+        "event_count": 1,
+        "meeting_count": 1,
+        "meeting_minutes": 48,
+        "event_minutes": 48,
+        "back_to_back_count": 0,
+        "first_event_hour": 11,
+        "last_event_hour": 11,
+    }
+    # Meeting minutes and the resting rate both climb by one a day.
+    assert body["correlations"]["resting_hr"]["same_day"] == {
+        "r": 1.0,
+        "n": INSIGHT_DAYS,
+        "insufficient_data": False,
+    }
+    assert body["correlations"]["resting_hr"]["next_day"]["n"] == INSIGHT_DAYS - 1
+    terciles = body["tercile_comparison"]["resting_hr"]["same_day"]
+    assert terciles["days"] == 6 and terciles["insufficient_data"] is False
+    assert terciles["top_third_mean"] > terciles["bottom_third_mean"]
+    assert len(body["series"]) == 1
+    assert body["series"][0]["occurrences"] == INSIGHT_DAYS
+    assert body["series"][0]["with_vitals"] == INSIGHT_DAYS
+    assert body["time_of_day"]["morning"]["n"] == INSIGHT_DAYS
+    assert body["time_of_day"]["evening"] == {"mean_hr_vs_resting_pct": None, "n": 0}
+    # The quietest days carry the lowest resting rate, so their elevation is the steepest.
+    assert [row["event_id"] for row in body["top_events"]] == [
+        f"event-{index}" for index in range(5)
+    ]
+    assert body["top_events"][0]["mean_hr"] == 100
+    assert body["caveats"]
+
+
+def test_insights_caveat_lists_the_events_heart_rate_could_not_cover(setup):
+    cfg, db, gemini, clock = setup
+    events, buckets, resting = insight_rows()
+    # Only the first meeting keeps its buckets, so the other eighteen cannot be read.
+    db.query.side_effect = stored(calendar=events, hr=buckets[:10], resting=resting)
+    db.fetch.return_value = {}
+    with TestClient(create_app(cfg, db, gemini, clock)) as client:
+        body = insights(client, cfg, "?period=30d").json()
+    assert [row["event_id"] for row in body["top_events"]] == ["event-0"]
+    assert body["series"][0]["with_vitals"] == 1
+    assert body["correlations"] == {}
+    assert any("coverage" in caveat for caveat in body["caveats"])
+    assert f"{INSIGHT_DAYS - 1} of {INSIGHT_DAYS}" in " ".join(body["caveats"])
+
+
+def test_insight_failures_reuse_the_health_error_codes_without_details(setup):
+    cfg, db, gemini, clock = setup
+    with TestClient(create_app(cfg, db, gemini, clock)) as client:
+        for error, status, code in (
+            (DataUnavailable("secret"), 503, "DATA_SERVICE_UNAVAILABLE"),
+            (QueryLimitExceeded("secret"), 422, "HEALTH_QUERY_TOO_LARGE"),
+        ):
+            db.query.side_effect = error
+            response = insights(client, cfg, "?period=30d")
+            assert response.status_code == status
+            assert response.json()["error"] == code
+            assert "secret" not in response.text

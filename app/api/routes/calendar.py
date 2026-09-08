@@ -8,7 +8,11 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import PlainTextResponse
 from app.core.security import authenticate
 from app.api.dependencies import get_calendar, get_influx
-from app.api.schemas.calendar import CalendarEventsResponse, CalendarStatusResponse
+from app.api.schemas.calendar import (
+    CalendarEventsResponse,
+    CalendarInsightsResponse,
+    CalendarStatusResponse,
+)
 from app.api.schemas.health import HealthQuery
 
 router = APIRouter()
@@ -46,3 +50,12 @@ def events(
     service=Depends(get_calendar),
 ):
     return service.events(query.period)
+
+
+@router.get("/api/calendar/insights", response_model=CalendarInsightsResponse)
+def insights(
+    query: Annotated[HealthQuery, Query()],
+    user=Depends(authenticate),
+    service=Depends(get_calendar),
+):
+    return service.insights(query.period)

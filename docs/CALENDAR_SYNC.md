@@ -139,6 +139,7 @@ docker compose exec influxdb influx -database FitbitHealthStats \
 | --- | --- | --- |
 | `GET /api/health/calendar?period=7d` | bearer | Stored `Calendar Events` rows, unprocessed (see docs/HEALTH_API.md) |
 | `GET /api/calendar/events?period=7d` | bearer | Readable events with the heart-rate response measured around each one |
+| `GET /api/calendar/insights?period=30d` | bearer | Meeting load per day, correlations with the daily metrics, recurring series |
 
 The connection endpoints — `connect`, `callback`, `status` and `connection` — are listed under
 [Connecting through the API](#connecting-through-the-api).
@@ -169,6 +170,28 @@ with its newest stored row. `vitals` is `null` when heart-rate buckets cover les
 the event; `notes[]` then says so, and also flags movement during the event or a missing resting
 baseline (the baseline falls back to the nearest resting heart rate within seven days). Elevated
 heart rate is a stress *proxy*, never a diagnosis: movement, caffeine and illness confound it.
+
+### `GET /api/calendar/insights`
+
+Everything `/api/calendar/events` measures, aggregated over the period — deterministic, no Gemini.
+Same period rules, same error codes. The response:
+
+| Field | Content |
+| --- | --- |
+| `period` | `start`, `end`, `timezone`, `days`, `bucket_minutes` of the read |
+| `days_with_events` | local days in the period holding at least one readable event |
+| `daily_load[]` | the last 14 of those days: `date`, `event_count`, `meeting_count`, `meeting_minutes`, `event_minutes`, `back_to_back_count` (gap ≤ 5 min), `first_event_hour`, `last_event_hour` |
+| `correlations{}` | per metric, `same_day` and `next_day` `{r, n, insufficient_data}`: Pearson *r* of the day's meeting minutes against `resting_hr`, `hrv_rmssd`, `sleep_hours`, `sleep_efficiency`, `steps`, `active_minutes`, `breathing_rate`, `skin_temperature_deviation`. Fewer than 10 paired days reports `insufficient_data` |
+| `tercile_comparison{}` | the same metrics on the busiest third of days against the quietest third (each ≥ 4 days): `top_third_mean`, `bottom_third_mean`, their meeting minutes, `difference`, `percent` |
+| `series[]` | up to 10 recurring meetings — grouped by recurrence id, else by title — with `occurrences`, `with_vitals`, `mean_hr_vs_resting_pct`, `mean_recovery_delta`, `confounded_count`. Series read at least 3 times rank first, steepest elevation on top |
+| `time_of_day{}` | `morning` (< 12), `afternoon` (12–17), `evening` (≥ 17) by local start hour: mean elevation and the `n` behind it |
+| `top_events[]` | the 5 steepest single events no movement spoiled |
+| `caveats[]` | the fixed warnings, plus how many events lacked heart-rate coverage |
+
+Sleep, HRV and resting heart rate are read the *morning after* the load they follow, so `next_day`
+is the meaningful column for them and `same_day` for the rest. The daily metric series are the ones
+`/api/ai/*` already computes; they are never re-derived here. A period without a readable event
+answers `200` with empty sections and reads no metrics at all.
 
 ## Troubleshooting
 
