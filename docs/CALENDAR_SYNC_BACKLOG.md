@@ -95,7 +95,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
 
 ### C0 Prerequisites `[manual]`
 
-- [ ] **C0.1 Google Cloud setup** `[manual]` — blocked by: none
+- [x] **C0.1 Google Cloud setup** `[manual]` — blocked by: none
   - Do: enable *Google Calendar API* in the project of the OAuth client you will use.
     Consent screen: if publishing status is *Testing*, refresh tokens expire after 7 days —
     switch to *In production* (personal use needs no verification; accept the one-time
