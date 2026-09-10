@@ -97,25 +97,84 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
 
 - [x] **C0.1 Google Cloud setup** `[manual]` — blocked by: none
   - Do: enable *Google Calendar API* in the project of the OAuth client you will use.
-    Consent screen: if publishing status is *Testing*, refresh tokens expire after 7 days —
-    switch to *In production* (personal use needs no verification; accept the one-time
-    "unverified app" screen). *Web application* client: add redirect URIs
+    Record the consent screen publishing status. Switching to *In production* and the
+    associated public branding setup are excluded from C0.1 completion per the user's
+    instruction on 2026-09-10. *Web application* client: add redirect URIs
     `http://localhost:8000/api/calendar/callback` (API connect, D13) and
     `http://localhost:8765/` (CLI script). *Desktop app* client: only the first one.
   - Done when: client id/secret known; API enabled; publishing status noted here.
-  - Notes:
-- [ ] **C0.2 Verify stress data availability** `[manual]` — blocked by: none
+  - Notes: Completed 2026-09-10 (America/Los_Angeles) for the agreed Testing-mode scope.
+    All required setup is complete; production publishing is deferred and does not block C0.1.
+    Cloud Console verification recorded on 2026-09-08 identified
+    project `FitBit` (`fitbit-505305`), OAuth client `Web client 1` (Web application).
+    Effective Calendar credentials use the `GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET`
+    fallback in `.env`; the client ID matched this Cloud client in that verification.
+    Live recheck on 2026-09-10: both credentials are present and the existing Calendar
+    refresh token exchanged successfully (HTTP 200), confirming the credentials work;
+    granted scope is `https://www.googleapis.com/auth/calendar.events.readonly`.
+    `GET https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1&fields=kind`
+    returned HTTP 200 with `{"kind":"calendar#events"}`, confirming Calendar API access
+    without retrieving event details. Both required redirect URIs were confirmed registered
+    in the 2026-09-08 Cloud Console check:
+    `http://localhost:8000/api/calendar/callback` and `http://localhost:8765/`.
+    Last recorded publishing status: **Testing**, user type **External** (2026-09-08;
+    console settings were not re-inspected or changed during this recheck). At that time the
+    [Audience page](https://console.cloud.google.com/auth/audience?project=fitbit-505305)
+    disabled `Publish app` and reported incomplete OAuth configuration. On the
+    [Branding page](https://console.cloud.google.com/auth/branding?project=fitbit-505305),
+    app name, support email, and developer contact were set, but homepage, privacy policy,
+    terms-of-service links, and authorized domains were blank. Public app URLs are needed
+    before finishing branding and switching to **In production**; this production-branding
+    portion is intentionally deferred until the frontend and its public legal pages are
+    ready. This is a separate production follow-up, not an outstanding C0.1 requirement.
+    Earlier notes also record homepage, privacy policy, and terms prepared in the separate
+    `C:\Users\ilyas\Projects\health-calendar-info` project. A public domain/hosting choice
+    was still pending; the review copy was private and not a usable OAuth branding URL.
+    The pages use the descriptive name `Health & Calendar`; align the OAuth app name
+    with the final published pages when completing Branding.
+    The earlier console check recorded a production-branding blocker
+    ([branding requirements](https://support.google.com/cloud/answer/15549049?hl=en)).
+    Testing authorizations/refresh tokens remain subject to Google's seven-day expiry
+    ([publishing status](https://support.google.com/cloud/answer/15549945?hl=en)).
+    The working API access is usable for current Testing-mode development, but it is not
+    complete production setup. For the deferred production follow-up, publish the legal pages on a
+    verified domain, add that domain and the three URLs in Branding, save, then switch the
+    Audience publishing status to **In production**. C0.1 remains completed independently
+    of that follow-up.
+    Validation (2026-09-10): full `python -m pytest -q` suite against a copy of the current
+    working-tree source in a disposable Linux container: **281 passed**. Windows `.venv`
+    suite: 280 passed, 1 failed in
+    `test_callback_stores_the_token_without_echoing_any_of_it` (POSIX mode `600`
+    assertion sees `666` on Windows), reproducing the previously documented platform failure.
+    No application code, Cloud settings, or stored credentials changed during this verification.
+- [x] **C0.2 Verify stress data availability** `[manual]` — blocked by: none
   - Do: with the existing Google Health token, list data types
     (`GET $GOOGLE_HEALTH_BASE_URL/v4/dataTypes` or the API reference) and look for
     stress / electrodermal / body-response types. Fitbit Web API: none (Stress Management
     Score is app-only). Record the exact data type name and one sample payload here.
   - Done when: Notes says `available: <data-type>` or `unavailable`. Gates C6.1.
-  - Notes:
-- [ ] **C0.3 Choose calendars** `[manual]` — blocked by: none
+  - Notes: `unavailable` — verified 2026-09-08 (America/Los_Angeles).
+    Existing Google Health token authenticated successfully (`GET /v4/users/me/settings`
+    returned HTTP 200). `GET https://health.googleapis.com/v4/dataTypes` returned HTTP 404
+    with an HTML error page; this is not a documented discovery endpoint, and its failure
+    alone does not establish data availability. Checked the official
+    [data type catalogue](https://developers.google.com/health/data-types) and
+    [v4 discovery document](https://health.googleapis.com/$discovery/rest?version=v4)
+    (HTTP 200): neither exposes a stress score, electrodermal activity / EDA, skin
+    conductance, or body-response data type. Exact matching data type: none.
+    Sample stress payload: N/A because no supported type exists.
+    `moods` includes logged `STRESSED` / `VERY_STRESSED` values, but the catalogue only
+    supports create/update/batchDelete under `.mindfulness.writeonly`; it is not a
+    readable sensor-derived stress score. C6.1 is skipped as unavailable; retain D7's
+    HR-elevation proxy wording. No credentials or personal health payloads recorded.
+- [x] **C0.3 Choose calendars** `[manual]` — blocked by: none
   - Do: `CALENDAR_IDS=primary` or a comma list of calendar ids
     (Google Calendar → Settings → *Integrate calendar* → Calendar ID).
   - Done when: value written to `.env`.
-  - Notes:
+  - Notes: Completed 2026-09-09 — `CALENDAR_IDS=primary` is set in the local `.env`,
+    selecting the authorized Google account's primary calendar. `CALENDAR_SYNC_ENABLED=true`
+    is also set. Add comma-separated Calendar IDs here only when additional calendars should
+    be synchronized.
 
 ### C1 Worker ingestion
 
@@ -625,7 +684,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
 
 ### C6 Optional real stress score
 
-- [ ] **C6.1 Google Health `Stress Score` measurement** — blocked by: C0.2 (`available`), C3.1
+- [x] **C6.1 Google Health `Stress Score` measurement** — blocked by: C0.2 (`available`), C3.1
   - Files: `app/providers/google_health/vitals.py`, `app/providers/google_health/provider.py`
     (`_vitals` group), `app/domain/measurements.py`, `docs/influxdb_schema.md`,
     `app/ai/analytics.py` (`FIELDS["stress_score"]`, category `recovery`),
@@ -636,7 +695,10 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     documented gap). Pure mapper, parity fixture, provider test.
   - Done when: tests green; docs list the measurement; insights correlate meeting load vs stress.
     If C0.2 says `unavailable`: tick with Notes `unavailable`, keep D7 wording in docs.
-  - Notes:
+  - Notes: `unavailable` — skipped per C0.2 verification on 2026-09-08. No supported
+    Google Health stress data type exists in the checked catalogue/discovery schema;
+    no `Stress Score` measurement implemented. D7 proxy wording remains unchanged.
+
 
 ## Dependency order
 

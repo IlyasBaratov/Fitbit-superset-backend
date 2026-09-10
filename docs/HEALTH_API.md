@@ -10,6 +10,8 @@ All routes require the existing `Authorization: Bearer <AI_API_TOKEN>` header. I
 | /api/health/workouts | Activity Records |
 | /api/health/spo2 | SPO2, SPO2_Intraday |
 | /api/health/body | height, weight, bmi |
+| /api/health/ecg | Electrocardiogram |
+| /api/health/irn | Irregular Rhythm Notifications |
 | /api/health/calendar | Calendar Events |
 | /api/devices | Latest Device Metadata and DeviceBatteryLevel observations |
 

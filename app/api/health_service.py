@@ -28,6 +28,8 @@ HEALTH_MEASUREMENTS = {
     "workouts": ("Activity Records",),
     "spo2": ("SPO2", "SPO2_Intraday"),
     "body": ("height", "weight", "bmi"),
+    "ecg": ("Electrocardiogram",),
+    "irn": ("Irregular Rhythm Notifications",),
     "calendar": ("Calendar Events",),
 }
 

@@ -16,7 +16,7 @@ def setup():
     clock = lambda: datetime(2026, 3, 9, 12, tzinfo=timezone.utc)
     return cfg, db, gemini, clock
 
-@pytest.mark.parametrize("endpoint", ["heart-rate", "sleep", "activity", "workouts", "spo2", "body", "calendar"])
+@pytest.mark.parametrize("endpoint", ["heart-rate", "sleep", "activity", "workouts", "spo2", "body", "ecg", "irn", "calendar"])
 def test_health_route_auth_empty_results_and_identity(setup, endpoint):
     cfg, db, gemini, clock = setup
     with TestClient(create_app(cfg, db, gemini, clock)) as client:

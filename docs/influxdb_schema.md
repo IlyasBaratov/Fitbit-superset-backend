@@ -40,6 +40,8 @@ therefore updates the same point.
 | `SPO2_Intraday` | — | `value` float | Percent; actual sample time |
 | `BreathingRate` | — | `value` float | Breaths/minute |
 | `Skin Temperature Variation` | — | `RelativeValue`, `nightlyTemperatureCelsius`, `baselineTemperatureCelsius`, `stddev30d` float | Celsius; relative value is nightly minus baseline |
+| `Electrocardiogram` | — | `EcgSessionId`, `resultClassification`, `startTime`, `endTime`, `deviceModel`, `firmwareVersion`, `featureVersion` string; `averageHeartRateBpm`, `samplingFrequencyHertz`, `leadNumber`, `millivoltsScalingFactor`, `sampleCount` integer | Google only; one point per ECG session. Raw waveform samples are not stored; `sampleCount` records their size |
+| `Irregular Rhythm Notifications` | — | `NotificationId`, `startTime`, `endTime`, `deviceModel`, `algorithmVersion`, `serviceVersion` string; `alertWindowCount`, `positiveAlertWindowCount`, `heartBeatCount` integer; `potentialAtrialFibrillation` boolean | Google only; one point per IRN alert. Individual heartbeat samples are not stored |
 | `weight` | — | `value`, `weightKg`, `weightLbs` float | `value` and `weightKg` are kg; `weightLbs` uses 2.2046226218 lb/kg |
 | `height` | — | `value`, `heightCm`, `heightMeters` float; `heightMillimeters` integer | `value` is cm; actual sample time |
 | `bmi` | — | `value`, `weightKg`, `heightMeters` float; `isCalculated` boolean | Weight timestamp; only when weight and height exist |
