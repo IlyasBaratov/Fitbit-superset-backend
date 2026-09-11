@@ -133,6 +133,42 @@ docker compose exec influxdb influx -database FitbitHealthStats \
   -execute 'SELECT * FROM "Calendar Events" ORDER BY time DESC LIMIT 5'
 ```
 
+## Grafana annotations
+
+`Calendar Events` points are written at the event start, so Grafana can draw them straight onto
+the existing heart-rate panel as annotations — one marker per event, labelled with its summary.
+
+Dashboard → *Settings* → *Annotations* → *New annotation query*:
+
+1. **Data source** — the InfluxDB 1.x datasource that serves the dashboards
+   (database `FitbitHealthStats`, the same one the heart-rate panels read).
+2. **Query** — paste:
+
+   ```sql
+   SELECT "summary" AS text, "EventId" AS tags FROM "Calendar Events"
+   WHERE $timeFilter AND "status" = 'confirmed' AND "isAllDay" = false
+   ```
+
+   `$timeFilter` is substituted with the dashboard range, so the query never scans more than the
+   panel shows. `status` and `isAllDay` are fields, `EventId` a tag; the aliases are what makes
+   Grafana pick the columns up.
+3. **Field mappings** — the InfluxQL annotation editor asks which columns to use. With the
+   aliases above the defaults already fit: *Time* → `time`, *Text* → `text`, *Tags* → `tags`.
+   Older or stricter datasource versions expose *Field for Text* / *Field for Tags* instead —
+   set them to `summary` and `EventId` and drop the two `AS` aliases from the query.
+4. **Filter by** — annotations are dashboard-wide by default; pick *Selected panels* and choose
+   the heart-rate panel to keep the rest of the dashboard clean.
+
+Adjust the `WHERE` clause to taste: drop `"status" = 'confirmed'` to see tentative events,
+add `AND "transparency" = 'opaque'` to hide events marked *free*, or
+`AND "duration_seconds" >= 600` to match the ten-minute floor `/api/calendar/events` applies.
+Times are stored in UTC and rendered in the dashboard timezone.
+
+No dashboard JSON is exported here: the query is **unverified against a live Grafana** — it was
+written from the schema in `docs/influxdb_schema.md`, not run on the stack. Running it, and
+exporting a dashboard from it, needs the live stack (the manual pass, C5.3 in
+`docs/CALENDAR_SYNC_BACKLOG.md`).
+
 ## Endpoints
 
 | Endpoint | Auth | Purpose |

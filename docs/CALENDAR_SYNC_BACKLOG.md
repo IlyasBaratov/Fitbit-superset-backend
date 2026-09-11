@@ -686,14 +686,19 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
 
 ### C5 Ops and docs
 
-- [ ] **C5.1 Grafana annotations** — blocked by: C1.7
+- [x] **C5.1 Grafana annotations** — blocked by: C1.7
   - Files: `docs/CALENDAR_SYNC.md` (Grafana section).
   - Do: document an InfluxQL annotation query overlaying events on the heart-rate panel:
     `SELECT "summary" AS text, "EventId" AS tags FROM "Calendar Events" WHERE $timeFilter AND
     "status" = 'confirmed' AND "isAllDay" = false`, with the datasource field mapping steps.
     Dashboard JSON export only if a live Grafana is available (`[manual]` otherwise).
   - Done when: section present; query verified on the local stack or marked unverified.
-  - Notes:
+  - Notes: done: `## Grafana annotations` section in `docs/CALENDAR_SYNC.md` — the InfluxQL
+    annotation query, datasource/field-mapping steps, per-panel filtering, and `WHERE` variants.
+    Marked **unverified**: the cloud run has no Grafana or InfluxDB, so the query was written
+    from `docs/influxdb_schema.md` and never executed; no dashboard JSON exported. Running it
+    live belongs to C5.3. Docs only, no code touched; 289 tests still pass (cloud image needs
+    `pip install cffi` on top of `requirements-dev.txt`, as C1.1 notes).
 - [ ] **C5.2 Docs consistency pass** — blocked by: C2.4, C4.2
   - Files: `README.md`, `docs/CALENDAR_SYNC.md`, `docs/influxdb_schema.md`, `docs/HEALTH_API.md`,
     `docs/AI_BACKEND.md`, `.env.example`, `compose.yml`.
