@@ -140,6 +140,7 @@ docker compose exec influxdb influx -database FitbitHealthStats \
 | `GET /api/health/calendar?period=7d` | bearer | Stored `Calendar Events` rows, unprocessed (see docs/HEALTH_API.md) |
 | `GET /api/calendar/events?period=7d` | bearer | Readable events with the heart-rate response measured around each one |
 | `GET /api/calendar/insights?period=30d` | bearer | Meeting load per day, correlations with the daily metrics, recurring series |
+| `POST /api/ai/calendar` | bearer | Gemini's reading of those insights (see docs/AI_BACKEND.md) |
 
 The connection endpoints — `connect`, `callback`, `status` and `connection` — are listed under
 [Connecting through the API](#connecting-through-the-api).
@@ -193,6 +194,21 @@ is the meaningful column for them and `same_day` for the rest. The daily metric 
 `/api/ai/*` already computes; they are never re-derived here. A period without a readable event
 answers `200` with empty sections and reads no metrics at all.
 
+### `POST /api/ai/calendar`
+
+The same insights, read by Gemini. `{"period":"30d"}`, or `{}` for `AI_DEFAULT_ANALYSIS_DAYS`;
+the body, response shape, error codes, caching and the one-analysis-at-a-time limit are the
+shared AI ones (docs/AI_BACKEND.md). `calendar` is also a focus category of `POST /api/ai/analyze`,
+and `POST /api/ai/ask` classifies a question mentioning meetings, appointments or a schedule into
+it.
+
+Gemini receives aggregates only — load means, correlations with at least 10 paired days, the top 5
+series, time-of-day elevation, the caveats. Event IDs, per-event rows and attendees never leave the
+API; series titles are cut to 80 characters and become `series-1 …` when
+`CALENDAR_AI_INCLUDE_TITLES=false` (D9). A period without a readable event answers
+`422 INSUFFICIENT_DATA`, and a calendar the API cannot read is dropped from the context rather than
+failing an analysis that also covers health data (D1).
+
 ## Troubleshooting
 
 - **`Google Calendar is not connected`** — the token file is missing at
@@ -225,6 +241,7 @@ answers `200` with empty sections and reads no metrics at all.
 | `CALENDAR_SYNC_DAYS_AHEAD` | `1` | Days after today in the rolling re-sync window |
 | `CALENDAR_API_BASE_URL` | `https://www.googleapis.com/calendar/v3` | Calendar API root |
 | `CALENDAR_REDIRECT_URI` | `http://localhost:8000/api/calendar/callback` | Redirect target of the API connect flow |
+| `CALENDAR_AI_INCLUDE_TITLES` | `true` | Send recurring series titles to Gemini; `false` replaces them with `series-N` |
 | `API_UID` | `10001` | uid the API container builds and runs as; align it with the collector |
 
 ## Privacy

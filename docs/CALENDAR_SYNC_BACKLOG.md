@@ -663,12 +663,26 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     diagnosis. `Settings.calendar_ai_include_titles` (`CALENDAR_AI_INCLUDE_TITLES`, default true)
     is in `.env.example` and the `ai-api` compose env. 277 → 287 tests. The cloud image still
     needs `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
-- [ ] **C4.2 `POST /api/ai/calendar` + docs** — blocked by: C4.1
+- [x] **C4.2 `POST /api/ai/calendar` + docs** — blocked by: C4.1
   - Files: `app/api/routes/ai.py` (add `"calendar"` to the specialized loop),
     `tests/test_api_structure.py`, `tests/test_ai_routes.py`, `docs/AI_BACKEND.md`
     (table row + limits bullet), `docs/CALENDAR_SYNC.md`.
   - Done when: path in OpenAPI; route test with mocked Gemini; docs updated.
-  - Notes:
+  - Notes: done: `"calendar"` joins the specialized loop in `app/api/routes/ai.py`, so
+    `POST /api/ai/calendar` is one word of diff — the route runs `AnalysisService.run(body,
+    "calendar", user)` like its four siblings, which sets `focus = ["calendar"]` and reaches
+    the C4.1 context path unchanged. No new schema: `Category` already carries `"calendar"`
+    and a specialized route builds its own focus rather than validating a supplied one. Route
+    tests use the existing fixture with a mocked calendar service: the success case asserts
+    the period reaches `insights("7d")` and that the prepared context Gemini receives has a
+    `calendar` section; the empty case asserts `days_with_events: 0` answers
+    `422 INSUFFICIENT_DATA` without calling Gemini (`PRIMARY["calendar"]`). `docs/AI_BACKEND.md`
+    gains the endpoint row, `calendar` in the focus list and a limits bullet (aggregates only,
+    titles toggle, `INSUFFICIENT_DATA` without events, an unreadable calendar never fails an
+    analysis, proxy not diagnosis); `docs/CALENDAR_SYNC.md` gains the endpoint row, a
+    `POST /api/ai/calendar` subsection under the insights section and the
+    `CALENDAR_AI_INCLUDE_TITLES` env row its text refers to. 287 → 289 tests. The cloud image
+    still needs `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
 
 ### C5 Ops and docs
 
