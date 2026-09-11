@@ -622,7 +622,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
 
 ### C4 Gemini
 
-- [ ] **C4.1 Calendar focus category and context** — blocked by: C3.3
+- [x] **C4.1 Calendar focus category and context** — blocked by: C3.3
   - Files: `app/api/schemas/ai.py` (`Category` + `"calendar"`), `app/ai/context.py`
     (`GROUPS`, `KEYWORDS`, `PRIMARY`, calendar section), `app/ai/service.py` (when
     `"calendar"` in focus: compute insights through the calendar service and inject
@@ -643,7 +643,26 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
   - Done when: tests: focus `calendar` builds the section; `classify("how do meetings affect
     my sleep")` → `calendar` + `sleep`; titles toggle; validator accepts a supported claim and
     rejects an unsupported "meetings" claim.
-  - Notes:
+  - Notes: done: `Category` gains `"calendar"` (focus `max_length` 6 → 7) and `app/ai/context.py`
+    gains the `calendar` group, keyword pattern and `PRIMARY = {"Calendar Events"}`, so a period
+    without a readable event answers `INSUFFICIENT_DATA`. `calendar_context(insights,
+    include_titles)` (pure, in `context.py` — the privacy boundary) summarizes the C3.3 payload
+    into aggregates only: load (`days_with_events`, means over the days the insights report plus a
+    `coverage_note` saying so, busiest weekday by mean meeting minutes), correlations filtered to a
+    numeric `r` with `n >= MIN_CORRELATION_DAYS` (imported, never re-stated), the top 5 series as
+    `label` + means, `time_of_day` and the caveats. `top_events`, `tercile_comparison` and every
+    event id stay out (D9); with `CALENDAR_AI_INCLUDE_TITLES=false` the labels become
+    `series-1 …`. `AnalysisService` takes an optional `calendar` service and computes the insights
+    for the already-validated day count only when `"calendar"` is in focus; an `APIError` or
+    `DataUnavailable` from that read logs once and drops the section, so a calendar problem can
+    never fail a health analysis (D1) — `app/api/main.py` builds the read service before the
+    analysis service to pass it. Evidence keys `calendar_load` / `calendar_series` are appended
+    when the section carries them, and the validator's new
+    `\b(?:meeting|calendar|event)s?\b` term rejects a meetings claim without them. The prompt
+    gains one line: calendar heart-rate figures are a movement-confounded proxy, never a
+    diagnosis. `Settings.calendar_ai_include_titles` (`CALENDAR_AI_INCLUDE_TITLES`, default true)
+    is in `.env.example` and the `ai-api` compose env. 277 → 287 tests. The cloud image still
+    needs `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
 - [ ] **C4.2 `POST /api/ai/calendar` + docs** — blocked by: C4.1
   - Files: `app/api/routes/ai.py` (add `"calendar"` to the specialized loop),
     `tests/test_api_structure.py`, `tests/test_ai_routes.py`, `docs/AI_BACKEND.md`

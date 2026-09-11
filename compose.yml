@@ -44,6 +44,7 @@ services:
       CALENDAR_CLIENT_SECRET: "${CALENDAR_CLIENT_SECRET:-}"
       CALENDAR_TOKEN_FILE_PATH: /app/tokens/google_calendar.token
       CALENDAR_REDIRECT_URI: "${CALENDAR_REDIRECT_URI:-http://localhost:8000/api/calendar/callback}"
+      CALENDAR_AI_INCLUDE_TITLES: "${CALENDAR_AI_INCLUDE_TITLES:-true}"
     depends_on:
       influxdb:
         condition: service_healthy

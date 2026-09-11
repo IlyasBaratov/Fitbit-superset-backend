@@ -34,6 +34,7 @@ class Settings:
     calendar_token_file_path: str = "./tokens/google_calendar.token"
     calendar_redirect_uri: str = "http://localhost:8000/api/calendar/callback"
     calendar_ids: tuple[str, ...] = ("primary",)
+    calendar_ai_include_titles: bool = True
 
     def __post_init__(self):
         if len(self.api_token) < 32:
@@ -107,6 +108,13 @@ class Settings:
                 if part.strip()
             )
             or ("primary",),
+            # Event titles are the person's own words: on by default, off on request (D9).
+            calendar_ai_include_titles=str(
+                os.getenv("CALENDAR_AI_INCLUDE_TITLES", "true")
+            )
+            .strip()
+            .lower()
+            not in ("false", "0", "no", "n"),
         )
 
 

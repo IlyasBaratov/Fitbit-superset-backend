@@ -78,6 +78,15 @@ def test_no_sleep_claim_without_sleep_evidence(context, output):
         validate_response(json.dumps(output), context)
 
 
+def test_meeting_claims_need_calendar_evidence(context, output):
+    output["summary"] = "Your meetings cluster on Wednesdays."
+    with pytest.raises(InvalidAIOutput):
+        validate_response(json.dumps(output), context)
+    context["evidence_keys"] = ["steps", "calendar_load", "calendar_series"]
+    context["calendar"] = {"load": {"days_with_events": 12}}
+    assert validate_response(json.dumps(output), context).summary
+
+
 def test_transient_timeout_is_retried_once_when_next_attempt_succeeds(context, output):
     client = Mock()
     client.models.generate_content.side_effect = [TimeoutError("timed out"), Mock(text=json.dumps(output))]

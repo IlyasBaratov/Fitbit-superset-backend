@@ -38,9 +38,9 @@ def create_app(settings=None, influx=None, gemini=None, clock=None):
             app.state.settings = cfg
             app.state.influx = db
             app.state.clock = clock
-            app.state.analysis = AnalysisService(cfg, db, llm, clock)
-            app.state.health = HealthReadService(cfg, db, clock)
             app.state.calendar = CalendarReadService(cfg, db, clock)
+            app.state.analysis = AnalysisService(cfg, db, llm, clock, app.state.calendar)
+            app.state.health = HealthReadService(cfg, db, clock)
             connect = CalendarConnectService(cfg, clock=clock)
             resources.callback(connect.close)
             app.state.calendar_connect = connect
