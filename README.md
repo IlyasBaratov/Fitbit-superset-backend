@@ -49,11 +49,12 @@ application is also syntax-checked against that runtime during Docker validation
 
 ## Docker stack
 
-The included `compose.yml` runs this repository's data collector, InfluxDB 1.11,
-and Grafana:
+The included `compose.yml` runs this repository's data collector, the AI/health read
+API, InfluxDB 1.11, and Grafana:
 
 | Service | Local endpoint |
 | --- | --- |
+| AI/health API (`ai-api`) | `http://127.0.0.1:8000` |
 | InfluxDB | `http://localhost:8086` |
 | Grafana | `http://localhost:3000` |
 
@@ -174,6 +175,28 @@ GOOGLE_HEALTH_BASE_URL=https://health.googleapis.com
 GOOGLE_HEALTH_API_VERSION=v4
 GOOGLE_OAUTH_TOKEN_URL=https://oauth2.googleapis.com/token
 ```
+
+Google Calendar correlation is optional and off by default. Enable it with the
+calendar values, which fall back to the Google OAuth client above:
+
+```env
+CALENDAR_SYNC_ENABLED=true
+CALENDAR_IDS=primary
+CALENDAR_CLIENT_ID=
+CALENDAR_CLIENT_SECRET=
+CALENDAR_TOKEN_FILE_PATH=./tokens/google_calendar.token
+CALENDAR_SYNC_DAYS_BACK=7
+CALENDAR_SYNC_DAYS_AHEAD=1
+CALENDAR_API_BASE_URL=https://www.googleapis.com/calendar/v3
+CALENDAR_REDIRECT_URI=http://localhost:8000/api/calendar/callback
+CALENDAR_AI_INCLUDE_TITLES=true
+API_UID=10001
+```
+
+`CALENDAR_SYNC_ENABLED`, `CALENDAR_SYNC_DAYS_*` and `CALENDAR_API_BASE_URL` are read by the
+collector; `CALENDAR_REDIRECT_URI`, `CALENDAR_AI_INCLUDE_TITLES` and `API_UID` by the API. See
+[docs/CALENDAR_SYNC.md](docs/CALENDAR_SYNC.md) for what each one means, the sync policy and the
+endpoints.
 
 `USER_ID` and `DEVICE_ID` become InfluxDB tags and must remain stable. The
 collector never generates random identifiers. OAuth tokens and the device

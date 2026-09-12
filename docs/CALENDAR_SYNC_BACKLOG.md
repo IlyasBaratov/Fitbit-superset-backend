@@ -699,7 +699,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     from `docs/influxdb_schema.md` and never executed; no dashboard JSON exported. Running it
     live belongs to C5.3. Docs only, no code touched; 289 tests still pass (cloud image needs
     `pip install cffi` on top of `requirements-dev.txt`, as C1.1 notes).
-- [ ] **C5.2 Docs consistency pass** — blocked by: C2.4, C4.2
+- [x] **C5.2 Docs consistency pass** — blocked by: C2.4, C4.2
   - Files: `README.md`, `docs/CALENDAR_SYNC.md`, `docs/influxdb_schema.md`, `docs/HEALTH_API.md`,
     `docs/AI_BACKEND.md`, `.env.example`, `compose.yml`.
   - Do: every calendar env var in code appears in `.env.example`, `compose.yml` and the doc's
@@ -707,7 +707,37 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     Env, Sync policy, Schema, Endpoints, Privacy, Limits, Troubleshooting. `docs/refactor_contracts.md`
     untouched.
   - Done when: grep of `CALENDAR_` across code and docs matches; no contradictions.
-  - Notes:
+  - Notes: done: the pass is enforced by `tests/test_docs_consistency.py`, which derives the
+    `CALENDAR_*` names from `os.getenv`/`os.environ.get` in `app/` and `scripts/` and asserts
+    each one appears in `.env.example`, `compose.yml` and `docs/CALENDAR_SYNC.md`, that
+    `.env.example` declares every key once and declares no calendar key the code does not read,
+    that every `calendar` path in the app's OpenAPI schema appears in a docs table, and that
+    `docs/CALENDAR_SYNC.md` carries Setup, Sync policy, Schema, Endpoints, Privacy, Limits,
+    Troubleshooting and Environment. Five gaps it found are fixed: `CALENDAR_API_BASE_URL` was
+    in `app/core/config.py` but in neither `.env.example` nor `compose.yml` (added to both, as
+    a collector-only var); `.env.example` ended with a stray `# Googe Calendar token` block
+    declaring unused `GOOGLE_CALENDAR_ACCESS_TOKEN`/`GOOGLE_CALENDAR_REFRESH_TOKEN` (tokens
+    live in the token file per D2, never in env) plus a second
+    `CALENDAR_SYNC_ENABLED=true` contradicting the `false` above it (block removed);
+    `docs/CALENDAR_SYNC.md` had no `Sync policy`, `Schema` or `Limits` section (added — the
+    policy paragraph moved out of the Docker section and expanded with the D5 request params,
+    the 250×50 pagination cap, why no `syncToken`, and the cancelled/re-sync/moved-event rules;
+    Schema restates the D4 tags, timestamp rule and fields and points at
+    `docs/influxdb_schema.md` as canonical; Limits collects the one-person ceiling, per-cycle
+    and per-read caps, which events get vitals, the evidence thresholds, the D7 proxy caveat,
+    the nonce TTL and the Testing-mode expiry); `docs/AI_BACKEND.md` still claimed the API runs
+    with "no host data mounts", which C1.8 changed (now states the `./tokens` mount and lists
+    the calendar vars the API reads); and Troubleshooting pointed at `SCHEDULE_AUTO_UPDATE` as
+    if it were an env var when it is derived from `AUTO_DATE_RANGE`. Also: the env table gained
+    a "Read by" column (collector / API / both) and a note on the two
+    `CALENDAR_TOKEN_FILE_PATH` defaults; `README.md` gained the optional calendar env block and
+    the `ai-api` row in the service table; the Setup and Troubleshooting notes on *In
+    production* now match what C0.1 recorded (branding must be completed first) instead of
+    "personal use needs no verification". `docs/refactor_contracts.md`,
+    `docs/influxdb_schema.md` and `docs/HEALTH_API.md` are unchanged — their calendar rows were
+    already right. Docs, `.env.example` and `compose.yml` only; no application code touched.
+    289 → 294 tests (cloud image needs `pip install cffi` on top of `requirements-dev.txt`,
+    as C1.1 notes).
 - [ ] **C5.3 Live verification on the Docker stack** `[manual]` — blocked by: C5.2
   - Do: `docker compose build fitbit-fetch-data ai-api`; set `CALENDAR_SYNC_ENABLED=true`;
     `docker compose up -d`; verify uid alignment (`docker compose exec fitbit-fetch-data id -u`

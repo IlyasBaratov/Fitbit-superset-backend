@@ -34,6 +34,13 @@ if not dotenv_values(path).get('AI_API_TOKEN'):
 
 Use the collector's `USER_ID` (default `user_001`), `HEALTH_API_PROVIDER`, and `DEVICE_ID` (default `fitbit_air_001`). Every query filters all three; changing these settings selects different series. Untagged legacy data is excluded. There is no client-supplied user identity or multiuser login.
 
+Google Calendar correlation is optional and off unless the collector syncs a calendar. The API
+reads `CALENDAR_CLIENT_ID` / `CALENDAR_CLIENT_SECRET` (falling back to `GOOGLE_*`),
+`CALENDAR_TOKEN_FILE_PATH`, `CALENDAR_REDIRECT_URI`, `CALENDAR_IDS` and
+`CALENDAR_AI_INCLUDE_TITLES`; `API_UID` must match the collector's uid so both containers can
+read the token file. [docs/CALENDAR_SYNC.md](CALENDAR_SYNC.md) documents all of them, and the
+API never needs `CALENDAR_SYNC_ENABLED`, which belongs to the collector.
+
 `LOCAL_TIMEZONE` selects the calendar timezone. `Automatic` uses `TZ`, defaulting to `America/Los_Angeles`. The API targets the existing InfluxDB 1.x database via the existing `INFLUXDB_*` connection settings. It does not support the collector's 2.x/3.x targets.
 
 ```powershell
@@ -43,7 +50,7 @@ docker compose up -d --no-deps ai-api
 docker compose ps ai-api
 ```
 
-For a new stack, use `docker compose up -d ai-api` to start the database dependency too. The API runs as a non-root user with a read-only filesystem, no host data mounts, one worker, and port `127.0.0.1:8000`. It has `unless-stopped` restart behavior. Keep it localhost-bound unless you add an appropriate authenticated HTTPS deployment layer.
+For a new stack, use `docker compose up -d ai-api` to start the database dependency too. The API runs as a non-root user with a read-only filesystem, one worker, and port `127.0.0.1:8000`. Its only host mount is the `./tokens` bind mount it shares with the collector, which the calendar connect flow needs (see [docs/CALENDAR_SYNC.md](CALENDAR_SYNC.md)); no health data is mounted from the host. It has `unless-stopped` restart behavior. Keep it localhost-bound unless you add an appropriate authenticated HTTPS deployment layer.
 
 Local development:
 

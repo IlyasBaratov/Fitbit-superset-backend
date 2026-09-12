@@ -101,6 +101,7 @@ services:
       CALENDAR_TOKEN_FILE_PATH: /app/tokens/google_calendar.token
       CALENDAR_SYNC_DAYS_BACK: "${CALENDAR_SYNC_DAYS_BACK:-7}"
       CALENDAR_SYNC_DAYS_AHEAD: "${CALENDAR_SYNC_DAYS_AHEAD:-1}"
+      CALENDAR_API_BASE_URL: "${CALENDAR_API_BASE_URL:-https://www.googleapis.com/calendar/v3}"
       DEVICENAME: "${DEVICENAME:-Your_Device_Name}"
       USER_ID: "${USER_ID:-user_001}"
       DEVICE_ID: "${DEVICE_ID:-fitbit_air_001}"
