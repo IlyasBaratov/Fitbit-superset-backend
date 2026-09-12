@@ -44,6 +44,8 @@ class IngestionScheduler:
                 self._run_job, jobs.sync_daily_metrics, group
             )
         self.scheduler.every(1).hours.do(self._run_job, jobs.sync_workouts)
+        if ingestion.calendar is not None:
+            self.scheduler.every(15).minutes.do(self._run_job, jobs.sync_calendar)
 
     def run(self):
         # Automatic mode refresh begins after startup; bulk runs refresh between chunks.

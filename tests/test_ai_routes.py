@@ -39,6 +39,32 @@ def test_endpoints(setup, endpoint):
     assert db.fetch.call_args.args[1].tzinfo is not None
     assert ai.generate.call_count == 1
 
+def test_calendar_route_analyzes_the_deterministic_insights(setup):
+    client, db, ai, app = setup
+    calendar = Mock()
+    calendar.insights.return_value = {
+        "days_with_events": 12,
+        "daily_load": [{"date": "2026-09-01", "event_count": 2, "meeting_count": 1,
+                        "meeting_minutes": 60, "back_to_back_count": 0}],
+        "correlations": {}, "series": [{"title": "Weekly sync", "occurrences": 4}],
+        "time_of_day": {}, "caveats": [],
+    }
+    app.state.analysis.calendar = calendar
+    response = client.post("/api/ai/calendar", json={"period": "7d"})
+    assert response.status_code == 200, response.text
+    assert response.json()["summary"] == "Summary"
+    assert calendar.insights.call_args.args == ("7d",)
+    assert "calendar" in ai.generate.call_args.args[0]
+
+
+def test_calendar_route_without_readable_events_skips_gemini(setup):
+    client, db, ai, app = setup
+    app.state.analysis.calendar = Mock()
+    app.state.analysis.calendar.insights.return_value = {"days_with_events": 0}
+    assert client.post("/api/ai/calendar", json={}).json()["error"] == "INSUFFICIENT_DATA"
+    ai.generate.assert_not_called()
+
+
 @pytest.mark.parametrize("period", ["0d", "91d", "7", "-1d", "all", "100000000d"])
 def test_invalid_period_skips_services(setup, period):
     client, db, ai, app = setup

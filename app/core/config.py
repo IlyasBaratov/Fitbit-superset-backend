@@ -29,6 +29,12 @@ class Settings:
     gemini_retry_jitter_ms: int = 200
     gemini_retry_max_elapsed_ms: int = 55000
     fallback_model: str = ""
+    calendar_client_id: str = ""
+    calendar_client_secret: str = field(default="", repr=False)
+    calendar_token_file_path: str = "./tokens/google_calendar.token"
+    calendar_redirect_uri: str = "http://localhost:8000/api/calendar/callback"
+    calendar_ids: tuple[str, ...] = ("primary",)
+    calendar_ai_include_titles: bool = True
 
     def __post_init__(self):
         if len(self.api_token) < 32:
@@ -88,6 +94,27 @@ class Settings:
                 os.getenv("GEMINI_RETRY_MAX_ELAPSED_MS", "55000")
             ),
             fallback_model=os.getenv("GEMINI_FALLBACK_MODEL", ""),
+            calendar_client_id=os.getenv("CALENDAR_CLIENT_ID")
+            or os.getenv("GOOGLE_CLIENT_ID", ""),
+            calendar_client_secret=os.getenv("CALENDAR_CLIENT_SECRET")
+            or os.getenv("GOOGLE_CLIENT_SECRET", ""),
+            calendar_token_file_path=os.getenv("CALENDAR_TOKEN_FILE_PATH")
+            or "./tokens/google_calendar.token",
+            calendar_redirect_uri=os.getenv("CALENDAR_REDIRECT_URI")
+            or "http://localhost:8000/api/calendar/callback",
+            calendar_ids=tuple(
+                part.strip()
+                for part in os.getenv("CALENDAR_IDS", "").split(",")
+                if part.strip()
+            )
+            or ("primary",),
+            # Event titles are the person's own words: on by default, off on request (D9).
+            calendar_ai_include_titles=str(
+                os.getenv("CALENDAR_AI_INCLUDE_TITLES", "true")
+            )
+            .strip()
+            .lower()
+            not in ("false", "0", "no", "n"),
         )
 
 
@@ -141,6 +168,14 @@ class WorkerSettings:
     dry_run_mode: bool
     log_level_name: str
     log_level: int
+    calendar_sync_enabled: bool
+    calendar_token_file_path: str
+    calendar_ids: tuple[str, ...]
+    calendar_client_id: str
+    calendar_client_secret: str = field(repr=False)
+    calendar_sync_days_back: int
+    calendar_sync_days_ahead: int
+    calendar_api_base_url: str
 
     @classmethod
     def from_env(cls):
@@ -226,6 +261,39 @@ class WorkerSettings:
             "yes",
             "y",
         ]
+        CALENDAR_SYNC_ENABLED = str(
+            os.environ.get("CALENDAR_SYNC_ENABLED", "False")
+        ).lower() in [
+            "true",
+            "1",
+            "yes",
+            "y",
+        ]
+        CALENDAR_TOKEN_FILE_PATH = os.environ.get(
+            "CALENDAR_TOKEN_FILE_PATH"
+        ) or os.path.join(os.path.dirname(TOKEN_FILE_PATH), "google_calendar.token")
+        CALENDAR_IDS = (
+            tuple(
+                part.strip()
+                for part in (os.environ.get("CALENDAR_IDS") or "").split(",")
+                if part.strip()
+            )
+            or ("primary",)
+        )
+        CALENDAR_CLIENT_ID = os.environ.get("CALENDAR_CLIENT_ID") or google_client_id
+        CALENDAR_CLIENT_SECRET = (
+            os.environ.get("CALENDAR_CLIENT_SECRET") or google_client_secret
+        )
+        CALENDAR_SYNC_DAYS_BACK = int(os.environ.get("CALENDAR_SYNC_DAYS_BACK") or "7")
+        CALENDAR_SYNC_DAYS_AHEAD = int(os.environ.get("CALENDAR_SYNC_DAYS_AHEAD") or "1")
+        if min(CALENDAR_SYNC_DAYS_BACK, CALENDAR_SYNC_DAYS_AHEAD) < 0:
+            raise ConfigurationError(
+                "CALENDAR_SYNC_DAYS_BACK and CALENDAR_SYNC_DAYS_AHEAD must not be negative"
+            )
+        CALENDAR_API_BASE_URL = (
+            os.environ.get("CALENDAR_API_BASE_URL")
+            or "https://www.googleapis.com/calendar/v3"
+        )
         LOG_LEVEL_NAME = (os.environ.get("LOG_LEVEL") or "DEBUG").strip().upper()
         LOG_LEVEL = getattr(logging, LOG_LEVEL_NAME, None)
         if not isinstance(LOG_LEVEL, int):
@@ -274,4 +342,12 @@ class WorkerSettings:
             dry_run_mode=DRY_RUN_MODE,
             log_level_name=LOG_LEVEL_NAME,
             log_level=LOG_LEVEL,
+            calendar_sync_enabled=CALENDAR_SYNC_ENABLED,
+            calendar_token_file_path=CALENDAR_TOKEN_FILE_PATH,
+            calendar_ids=CALENDAR_IDS,
+            calendar_client_id=CALENDAR_CLIENT_ID,
+            calendar_client_secret=CALENDAR_CLIENT_SECRET,
+            calendar_sync_days_back=CALENDAR_SYNC_DAYS_BACK,
+            calendar_sync_days_ahead=CALENDAR_SYNC_DAYS_AHEAD,
+            calendar_api_base_url=CALENDAR_API_BASE_URL,
         )

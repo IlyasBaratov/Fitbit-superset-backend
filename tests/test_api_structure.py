@@ -10,4 +10,4 @@ def test_compatible_api_exports_and_prompt():
     assert LegacyResponse is AIResponse
     assert PROMPT.strip()
     paths = set(create_app().openapi()["paths"])
-    assert paths >= {"/health", *("/api/ai/" + name for name in ("analyze", "ask", "sleep", "activity", "workouts", "recovery", "test"))}
+    assert paths >= {"/health", *("/api/ai/" + name for name in ("analyze", "ask", "sleep", "activity", "workouts", "recovery", "calendar", "test"))}

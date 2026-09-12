@@ -2,7 +2,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 Category = Literal[
-    "sleep", "activity", "workouts", "recovery", "cardiovascular", "body"
+    "sleep", "activity", "workouts", "recovery", "cardiovascular", "body", "calendar"
 ]
 
 
@@ -12,7 +12,7 @@ class AnalysisRequest(BaseModel):
     focus: list[Category] = Field(
         default_factory=lambda: ["sleep", "activity", "recovery", "workouts"],
         min_length=1,
-        max_length=6,
+        max_length=7,
     )
 
 

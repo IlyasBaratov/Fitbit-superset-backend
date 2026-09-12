@@ -13,9 +13,12 @@ def test_all_application_modules_import_without_runtime_side_effects():
 
 
 def test_pure_mappers_have_no_infrastructure_imports():
-    for provider in ("fitbit", "google_health"):
+    for provider in ("fitbit", "google_health", "google_calendar"):
         for filename in ("mapper.py", "vitals.py", "activity.py", "sleep.py"):
-            tree = ast.parse((Path("app/providers") / provider / filename).read_text(encoding="utf-8"))
+            path = Path("app/providers") / provider / filename
+            if not path.exists():
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
             modules = [node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)]
             assert all(not module.startswith(("app.storage", "app.ingestion")) and not module.endswith("client") for module in modules)
             imports = [alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names]

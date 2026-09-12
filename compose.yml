@@ -5,11 +5,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
+      args:
+        API_UID: "${API_UID:-10001}"
     image: fitbit-ai-api:latest
     restart: unless-stopped
     read_only: true
+    # Must match the collector's appuser: docker compose exec fitbit-fetch-data id -u
+    user: "${API_UID:-10001}"
     tmpfs:
       - /tmp
+    volumes:
+      - ./tokens:/app/tokens
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -33,6 +39,12 @@ services:
       INFLUXDB_DATABASE: "${INFLUXDB_DATABASE:-FitbitHealthStats}"
       INFLUXDB_USERNAME: "${INFLUXDB_USERNAME:-fitbit_user}"
       INFLUXDB_PASSWORD: "${INFLUXDB_PASSWORD:-fitbit_password}"
+      CALENDAR_IDS: "${CALENDAR_IDS:-primary}"
+      CALENDAR_CLIENT_ID: "${CALENDAR_CLIENT_ID:-}"
+      CALENDAR_CLIENT_SECRET: "${CALENDAR_CLIENT_SECRET:-}"
+      CALENDAR_TOKEN_FILE_PATH: /app/tokens/google_calendar.token
+      CALENDAR_REDIRECT_URI: "${CALENDAR_REDIRECT_URI:-http://localhost:8000/api/calendar/callback}"
+      CALENDAR_AI_INCLUDE_TITLES: "${CALENDAR_AI_INCLUDE_TITLES:-true}"
     depends_on:
       influxdb:
         condition: service_healthy
@@ -82,6 +94,14 @@ services:
       GOOGLE_HEALTH_BASE_URL: "${GOOGLE_HEALTH_BASE_URL:-https://health.googleapis.com}"
       GOOGLE_HEALTH_API_VERSION: "${GOOGLE_HEALTH_API_VERSION:-v4}"
       GOOGLE_OAUTH_TOKEN_URL: "${GOOGLE_OAUTH_TOKEN_URL:-https://oauth2.googleapis.com/token}"
+      CALENDAR_SYNC_ENABLED: "${CALENDAR_SYNC_ENABLED:-false}"
+      CALENDAR_IDS: "${CALENDAR_IDS:-primary}"
+      CALENDAR_CLIENT_ID: "${CALENDAR_CLIENT_ID:-}"
+      CALENDAR_CLIENT_SECRET: "${CALENDAR_CLIENT_SECRET:-}"
+      CALENDAR_TOKEN_FILE_PATH: /app/tokens/google_calendar.token
+      CALENDAR_SYNC_DAYS_BACK: "${CALENDAR_SYNC_DAYS_BACK:-7}"
+      CALENDAR_SYNC_DAYS_AHEAD: "${CALENDAR_SYNC_DAYS_AHEAD:-1}"
+      CALENDAR_API_BASE_URL: "${CALENDAR_API_BASE_URL:-https://www.googleapis.com/calendar/v3}"
       DEVICENAME: "${DEVICENAME:-Your_Device_Name}"
       USER_ID: "${USER_ID:-user_001}"
       DEVICE_ID: "${DEVICE_ID:-fitbit_air_001}"

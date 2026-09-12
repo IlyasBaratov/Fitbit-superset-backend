@@ -11,6 +11,9 @@ from app.providers.fitbit.provider import FitbitProvider
 from app.providers.google_health.auth import GoogleTokenManager
 from app.providers.google_health.client import GoogleHealthClient
 from app.providers.google_health.provider import GoogleHealthProvider
+from app.providers.google_calendar.auth import GoogleCalendarTokenManager
+from app.providers.google_calendar.client import GoogleCalendarClient
+from app.providers.google_calendar.provider import GoogleCalendarProvider
 
 
 def create_provider(settings: WorkerSettings) -> HealthProvider:
@@ -40,6 +43,23 @@ def create_provider(settings: WorkerSettings) -> HealthProvider:
             if settings.devicename == "Your_Device_Name" and metadata.get("deviceName"):
                 provider.device_name = metadata["deviceName"]
         return provider
+    except Exception:
+        transport.close()
+        token.close()
+        raise
+
+
+def create_calendar_provider(
+    settings: WorkerSettings, timezone
+) -> GoogleCalendarProvider | None:
+    """No startup refresh: the calendar token appears only once a person connects (D2, D13)."""
+    if not settings.calendar_sync_enabled:
+        return None
+    token = GoogleCalendarTokenManager(settings)
+    transport = ProviderHTTPClient(settings, token)
+    try:
+        client = GoogleCalendarClient(settings, transport)
+        return GoogleCalendarProvider(settings, client, timezone)
     except Exception:
         transport.close()
         token.close()

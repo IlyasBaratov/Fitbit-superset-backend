@@ -9,6 +9,7 @@ def provider(monkeypatch):
     monkeypatch.setattr("app.core.config.load_dotenv", lambda: None)
     client = Mock()
     client.get_google_datapoints_for_date_range.return_value = []
+    client.get_google_session_datapoints_for_date_range.return_value = []
     client.request_google_data_points_list.return_value = {}
     return GoogleHealthProvider(replace(WorkerSettings.from_env(), health_api_provider="google"), client, pytz.utc, "Watch"), client
 
@@ -23,13 +24,21 @@ def test_vitals_body_and_google_specific_fields(monkeypatch):
       "oxygen-saturation": [({"oxygenSaturation": {"percentage": 98}}, ts)],
       "weight": [({"weight": {"sampleTime": {"physicalTime": ts}, "weightGrams": 80000}}, ts)]}
     client.get_google_datapoints_for_date_range.side_effect = lambda kind, *_: samples.get(kind, [])
+    sessions = {
+      "electrocardiogram": [({"name": "users/1/dataTypes/electrocardiogram/dataPoints/ecg-1", "electrocardiogram": {"interval": {"startTime": ts, "endTime": ts}, "resultClassification": "NORMAL_SINUS_RHYTHM", "beatsPerMinuteAvg": "64", "samplingFrequencyHertz": 250, "leadNumber": 1, "millivoltsScalingFactor": 1000, "waveformSamples": [1, 2, 3], "medicalDeviceInfo": {"deviceModel": "Sense 2", "firmwareVersion": "1"}}}, ts)],
+      "irregular-rhythm-notification": [({"name": "users/1/dataTypes/irregular-rhythm-notification/dataPoints/irn-1", "irregularRhythmNotification": {"interval": {"startTime": ts, "endTime": "2026-08-20T12:30:00Z"}, "alertWindows": [{"positive": True, "heartBeats": [{}, {}]}], "medicalDeviceInfo": {"deviceModel": "Sense 2", "algorithmVersion": "2"}}}, ts)]}
+    client.get_google_session_datapoints_for_date_range.side_effect = lambda kind, *_: sessions.get(kind, [])
     client.request_google_data_points_list.return_value = {"dataPoints": [{"height": {"sampleTime": {"physicalTime": "2026-08-01T00:00:00Z"}, "heightMillimeters": 1840}}]}
     points = {point.measurement: point for point in api.fetch_daily_group("30d", "2026-08-20", "2026-08-20")}
-    assert set(points) == {"HRV", "BreathingRate", "Skin Temperature Variation", "SPO2_Intraday", "height", "weight", "bmi"}
+    assert set(points) == {"HRV", "BreathingRate", "Skin Temperature Variation", "SPO2_Intraday", "Electrocardiogram", "Irregular Rhythm Notifications", "height", "weight", "bmi"}
     assert points["HRV"].fields["entropy"] == 2
     assert points["weight"].fields["value"] == 80
     assert points["bmi"].fields["value"] == 23.63
     assert points["Skin Temperature Variation"].fields["RelativeValue"] == 1
+    assert points["Electrocardiogram"].fields["sampleCount"] == 3
+    assert "waveformSamples" not in points["Electrocardiogram"].fields
+    assert points["Irregular Rhythm Notifications"].fields["potentialAtrialFibrillation"] is True
+    assert points["Irregular Rhythm Notifications"].fields["heartBeatCount"] == 2
 
 
 def test_daily_rollup_measurements(monkeypatch):

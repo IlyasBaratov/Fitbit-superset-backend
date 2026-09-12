@@ -10,7 +10,7 @@ Every point has these string tags:
 | Tag | Source |
 | --- | --- |
 | `UserId` | Stable `USER_ID` configuration |
-| `Provider` | Active `HEALTH_API_PROVIDER` (`google` or `fitbit`) |
+| `Provider` | Active `HEALTH_API_PROVIDER` (`google` or `fitbit`); `google_calendar` for calendar rows |
 | `Device` | Human-readable `DEVICENAME` or discovered name |
 | `DeviceId` | Stable `DEVICE_ID` configuration |
 
@@ -40,11 +40,14 @@ therefore updates the same point.
 | `SPO2_Intraday` | — | `value` float | Percent; actual sample time |
 | `BreathingRate` | — | `value` float | Breaths/minute |
 | `Skin Temperature Variation` | — | `RelativeValue`, `nightlyTemperatureCelsius`, `baselineTemperatureCelsius`, `stddev30d` float | Celsius; relative value is nightly minus baseline |
+| `Electrocardiogram` | — | `EcgSessionId`, `resultClassification`, `startTime`, `endTime`, `deviceModel`, `firmwareVersion`, `featureVersion` string; `averageHeartRateBpm`, `samplingFrequencyHertz`, `leadNumber`, `millivoltsScalingFactor`, `sampleCount` integer | Google only; one point per ECG session. Raw waveform samples are not stored; `sampleCount` records their size |
+| `Irregular Rhythm Notifications` | — | `NotificationId`, `startTime`, `endTime`, `deviceModel`, `algorithmVersion`, `serviceVersion` string; `alertWindowCount`, `positiveAlertWindowCount`, `heartBeatCount` integer; `potentialAtrialFibrillation` boolean | Google only; one point per IRN alert. Individual heartbeat samples are not stored |
 | `weight` | — | `value`, `weightKg`, `weightLbs` float | `value` and `weightKg` are kg; `weightLbs` uses 2.2046226218 lb/kg |
 | `height` | — | `value`, `heightCm`, `heightMeters` float; `heightMillimeters` integer | `value` is cm; actual sample time |
 | `bmi` | — | `value`, `weightKg`, `heightMeters` float; `isCalculated` boolean | Weight timestamp; only when weight and height exist |
 | `DeviceBatteryLevel` | — | `value` float | Percent; omitted when provider has no battery API |
 | `Device Metadata` | — | `deviceName`, `deviceModel`, `timezone`, `lastSyncTime`, `firmwareVersion`, `connectionStatus` string; `batteryPercent` float | Actual available metadata only; written when content changes |
+| `Calendar Events` | `CalendarId`, `EventId` | `summary`, `startTime`, `endTime`, `status`, `eventType`, `transparency`, `responseStatus`, `recurringEventId`, `updated` string; `duration_seconds`, `attendees` integer; `isOrganizer`, `isAllDay` boolean | Event start; all-day events use the local-day boundary. Person-keyed: `Provider=google_calendar`, `Device`/`DeviceId` are constants, not the wearable. `summary` keeps ≤ 200 printable characters; attendee identities are never stored |
 
 ## Compatibility decisions
 

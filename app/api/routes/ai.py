@@ -25,7 +25,7 @@ def specialized(endpoint):
     return route
 
 
-for endpoint in ("sleep", "activity", "workouts", "recovery"):
+for endpoint in ("sleep", "activity", "workouts", "recovery", "calendar"):
     router.add_api_route(
         "/api/ai/" + endpoint,
         specialized(endpoint),

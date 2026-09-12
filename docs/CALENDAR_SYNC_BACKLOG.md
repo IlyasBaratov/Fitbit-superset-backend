@@ -95,31 +95,90 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
 
 ### C0 Prerequisites `[manual]`
 
-- [ ] **C0.1 Google Cloud setup** `[manual]` — blocked by: none
+- [x] **C0.1 Google Cloud setup** `[manual]` — blocked by: none
   - Do: enable *Google Calendar API* in the project of the OAuth client you will use.
-    Consent screen: if publishing status is *Testing*, refresh tokens expire after 7 days —
-    switch to *In production* (personal use needs no verification; accept the one-time
-    "unverified app" screen). *Web application* client: add redirect URIs
+    Record the consent screen publishing status. Switching to *In production* and the
+    associated public branding setup are excluded from C0.1 completion per the user's
+    instruction on 2026-09-10. *Web application* client: add redirect URIs
     `http://localhost:8000/api/calendar/callback` (API connect, D13) and
     `http://localhost:8765/` (CLI script). *Desktop app* client: only the first one.
   - Done when: client id/secret known; API enabled; publishing status noted here.
-  - Notes:
-- [ ] **C0.2 Verify stress data availability** `[manual]` — blocked by: none
+  - Notes: Completed 2026-09-10 (America/Los_Angeles) for the agreed Testing-mode scope.
+    All required setup is complete; production publishing is deferred and does not block C0.1.
+    Cloud Console verification recorded on 2026-09-08 identified
+    project `FitBit` (`fitbit-505305`), OAuth client `Web client 1` (Web application).
+    Effective Calendar credentials use the `GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET`
+    fallback in `.env`; the client ID matched this Cloud client in that verification.
+    Live recheck on 2026-09-10: both credentials are present and the existing Calendar
+    refresh token exchanged successfully (HTTP 200), confirming the credentials work;
+    granted scope is `https://www.googleapis.com/auth/calendar.events.readonly`.
+    `GET https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1&fields=kind`
+    returned HTTP 200 with `{"kind":"calendar#events"}`, confirming Calendar API access
+    without retrieving event details. Both required redirect URIs were confirmed registered
+    in the 2026-09-08 Cloud Console check:
+    `http://localhost:8000/api/calendar/callback` and `http://localhost:8765/`.
+    Last recorded publishing status: **Testing**, user type **External** (2026-09-08;
+    console settings were not re-inspected or changed during this recheck). At that time the
+    [Audience page](https://console.cloud.google.com/auth/audience?project=fitbit-505305)
+    disabled `Publish app` and reported incomplete OAuth configuration. On the
+    [Branding page](https://console.cloud.google.com/auth/branding?project=fitbit-505305),
+    app name, support email, and developer contact were set, but homepage, privacy policy,
+    terms-of-service links, and authorized domains were blank. Public app URLs are needed
+    before finishing branding and switching to **In production**; this production-branding
+    portion is intentionally deferred until the frontend and its public legal pages are
+    ready. This is a separate production follow-up, not an outstanding C0.1 requirement.
+    Earlier notes also record homepage, privacy policy, and terms prepared in the separate
+    `C:\Users\ilyas\Projects\health-calendar-info` project. A public domain/hosting choice
+    was still pending; the review copy was private and not a usable OAuth branding URL.
+    The pages use the descriptive name `Health & Calendar`; align the OAuth app name
+    with the final published pages when completing Branding.
+    The earlier console check recorded a production-branding blocker
+    ([branding requirements](https://support.google.com/cloud/answer/15549049?hl=en)).
+    Testing authorizations/refresh tokens remain subject to Google's seven-day expiry
+    ([publishing status](https://support.google.com/cloud/answer/15549945?hl=en)).
+    The working API access is usable for current Testing-mode development, but it is not
+    complete production setup. For the deferred production follow-up, publish the legal pages on a
+    verified domain, add that domain and the three URLs in Branding, save, then switch the
+    Audience publishing status to **In production**. C0.1 remains completed independently
+    of that follow-up.
+    Validation (2026-09-10): full `python -m pytest -q` suite against a copy of the current
+    working-tree source in a disposable Linux container: **281 passed**. Windows `.venv`
+    suite: 280 passed, 1 failed in
+    `test_callback_stores_the_token_without_echoing_any_of_it` (POSIX mode `600`
+    assertion sees `666` on Windows), reproducing the previously documented platform failure.
+    No application code, Cloud settings, or stored credentials changed during this verification.
+- [x] **C0.2 Verify stress data availability** `[manual]` — blocked by: none
   - Do: with the existing Google Health token, list data types
     (`GET $GOOGLE_HEALTH_BASE_URL/v4/dataTypes` or the API reference) and look for
     stress / electrodermal / body-response types. Fitbit Web API: none (Stress Management
     Score is app-only). Record the exact data type name and one sample payload here.
   - Done when: Notes says `available: <data-type>` or `unavailable`. Gates C6.1.
-  - Notes:
-- [ ] **C0.3 Choose calendars** `[manual]` — blocked by: none
+  - Notes: `unavailable` — verified 2026-09-08 (America/Los_Angeles).
+    Existing Google Health token authenticated successfully (`GET /v4/users/me/settings`
+    returned HTTP 200). `GET https://health.googleapis.com/v4/dataTypes` returned HTTP 404
+    with an HTML error page; this is not a documented discovery endpoint, and its failure
+    alone does not establish data availability. Checked the official
+    [data type catalogue](https://developers.google.com/health/data-types) and
+    [v4 discovery document](https://health.googleapis.com/$discovery/rest?version=v4)
+    (HTTP 200): neither exposes a stress score, electrodermal activity / EDA, skin
+    conductance, or body-response data type. Exact matching data type: none.
+    Sample stress payload: N/A because no supported type exists.
+    `moods` includes logged `STRESSED` / `VERY_STRESSED` values, but the catalogue only
+    supports create/update/batchDelete under `.mindfulness.writeonly`; it is not a
+    readable sensor-derived stress score. C6.1 is skipped as unavailable; retain D7's
+    HR-elevation proxy wording. No credentials or personal health payloads recorded.
+- [x] **C0.3 Choose calendars** `[manual]` — blocked by: none
   - Do: `CALENDAR_IDS=primary` or a comma list of calendar ids
     (Google Calendar → Settings → *Integrate calendar* → Calendar ID).
   - Done when: value written to `.env`.
-  - Notes:
+  - Notes: Completed 2026-09-09 — `CALENDAR_IDS=primary` is set in the local `.env`,
+    selecting the authorized Google account's primary calendar. `CALENDAR_SYNC_ENABLED=true`
+    is also set. Add comma-separated Calendar IDs here only when additional calendars should
+    be synchronized.
 
 ### C1 Worker ingestion
 
-- [ ] **C1.1 Worker settings for calendar sync** — blocked by: none
+- [x] **C1.1 Worker settings for calendar sync** — blocked by: none
   - Files: `app/core/config.py` (`WorkerSettings`), `app/worker/main.py` (secret filter),
     `.env.example`, `compose.yml` (`fitbit-fetch-data` env), `tests/test_worker_config.py`.
   - Do: add frozen fields `calendar_sync_enabled` (bool, default false, same truthy parsing
@@ -134,8 +193,12 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     `CALENDAR_SYNC_DAYS_AHEAD`, `CALENDAR_TOKEN_FILE_PATH: /app/tokens/google_calendar.token`.
     Add `calendar_client_secret` to the `configure_logging` secrets tuple.
   - Done when: tests cover defaults, comma parsing, fallback credentials, invalid days.
-  - Notes:
-- [ ] **C1.2 Calendar token manager** — blocked by: C1.1
+  - Notes: done: 8 frozen `WorkerSettings` fields + `CALENDAR_API_BASE_URL` override,
+    negative day counts raise `ConfigurationError`, secret is `repr=False` and in the worker
+    secret filter; `.env.example` and `compose.yml` (`fitbit-fetch-data`) carry the vars.
+    141 → 158 tests. Note: the cloud image needs `pip install cffi` on top of
+    `requirements-dev.txt` or 5 API test modules fail to collect (`_cffi_backend`).
+- [x] **C1.2 Calendar token manager** — blocked by: C1.1
   - Files: `app/providers/google_calendar/__init__.py`, `app/providers/google_calendar/auth.py`,
     `tests/test_token_managers.py`.
   - Do: `GoogleCalendarTokenManager(GoogleTokenManager)` with `provider = "google_calendar"`.
@@ -149,8 +212,14 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
   - Done when: tests: refresh writes the calendar token path, keeps `refresh_token` when
     Google omits it, provider mismatch raises `AuthenticationError`, health token file untouched,
     error text never contains the secret, mtime change triggers a reload.
-  - Notes:
-- [ ] **C1.3 OAuth connect helpers + CLI authorize script** — blocked by: C1.2
+  - Notes: done: `app/providers/google_calendar/auth.py` adds
+    `GoogleCalendarTokenManager(GoogleTokenManager)` (`provider = "google_calendar"`), which
+    re-points the inherited refresh at the calendar token path and `CALENDAR_CLIENT_ID/SECRET`
+    via `dataclasses.replace`, remembers the token file `st_mtime_ns` on `load()`/`_save()` and
+    drops the cached tokens in `get_access_token()` when the file changed underneath it.
+    158 → 162 tests. The cloud image still needs `pip install cffi` on top of
+    `requirements-dev.txt` (see C1.1).
+- [x] **C1.3 OAuth connect helpers + CLI authorize script** — blocked by: C1.2
   - Files: `app/providers/google_calendar/connect.py` (new), `scripts/google_calendar_authorize.py`
     (new), `tests/test_calendar_connect.py`, `docs/CALENDAR_SYNC.md` (new: Setup section).
   - Do: helpers, no I/O beyond the injected session: `authorization_url(client_id,
@@ -170,8 +239,18 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     shape); script test drives the handler with a fake request path and a mocked exchange →
     token file content; wrong `state` → rejected, nothing written. Docs: run on the host,
     token lands in `./tokens/`, which Compose bind-mounts into the worker.
-  - Notes:
-- [ ] **C1.4 Calendar HTTP client** — blocked by: C1.1
+  - Notes: done: `app/providers/google_calendar/connect.py` holds `authorization_url`,
+    `exchange_code`, `token_record` and best-effort `revoke` (session injected, no other I/O,
+    failures never echo the response body); `scripts/google_calendar_authorize.py` prints the
+    URL, opens a browser and serves one loopback request whose `state` is compared with
+    `secrets.compare_digest` before the exchange, saving through
+    `GoogleCalendarTokenManager._save` (atomic, `0600` from `NamedTemporaryFile`). No stdin, no
+    token ever printed. `docs/CALENDAR_SYNC.md` adds Setup, Environment and Privacy sections.
+    162 → 175 tests. The script is run as `python -m scripts.google_calendar_authorize` from
+    the repository root (`scripts/` is a namespace package; running the file directly leaves
+    `app` off `sys.path`). The cloud image still needs `pip install cffi` on top of
+    `requirements-dev.txt` (see C1.1).
+- [x] **C1.4 Calendar HTTP client** — blocked by: C1.1
   - Files: `app/providers/google_calendar/client.py`, `tests/test_google_calendar_client.py`.
   - Do: `GoogleCalendarClient(settings, transport)`;
     `list_events(calendar_id, time_min, time_max) -> list[dict]`: GET
@@ -181,8 +260,15 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     (5xx skip) → stop and log, keep collected items.
   - Done when: Mock-transport tests: params, id encoding (`user@example.com`), 3-page
     pagination, `None` page handling. No network at import (architecture test).
-  - Notes:
-- [ ] **C1.5 Pure event mapper + schema contract** — blocked by: none
+  - Notes: done: `app/providers/google_calendar/client.py` adds `GoogleCalendarClient`
+    (`list_events(calendar_id, time_min, time_max)`) building the events URL from
+    `calendar_api_base_url` with `quote(calendar_id, safe="")`, sending the D5 params
+    (`singleEvents`/`showDeleted` as the strings `"true"`, `orderBy=startTime`,
+    `maxResults=250`) and following `nextPageToken` up to `MAX_PAGES=50`; a non-dict page
+    (the transport's 5xx skip returns `None`) logs and returns the events collected so far.
+    Endpoint definitions only, no parsing — same shape as `FitbitClient`. 175 → 180 tests.
+    The cloud image still needs `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
+- [x] **C1.5 Pure event mapper + schema contract** — blocked by: none
   - Files: `app/providers/google_calendar/mapper.py`, `app/domain/measurements.py`
     (`FIELD_TYPES["Calendar Events"]`), `docs/influxdb_schema.md`,
     `tests/fixtures/google_calendar_contract.json`, `tests/test_google_calendar_mapper.py`,
@@ -196,8 +282,21 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     plus expected normalized points (same style as `tests/fixtures/google_mapping_contract.json`).
   - Done when: fixture parity test passes; `FIELD_TYPES` entry; schema doc row; architecture
     test extended; `tests/test_health_schema.py` still green.
-  - Notes:
-- [ ] **C1.6 Calendar provider + ingestion service + jobs** — blocked by: C1.2, C1.4, C1.5
+  - Notes: done: `app/providers/google_calendar/mapper.py` adds `map_events(items,
+    calendar_id, local_timezone)` (pytz zone, like the Fitbit mapper) returning `Calendar
+    Events` `HealthPoint`s per the data contract: timed starts through `utc_timestamp`,
+    all-day through `local_date_boundary_utc` (duration from the date difference, so a DST day
+    is 25 h), `originalStartTime` fallback for cancelled instances, items without an `id` or
+    any start skipped, `summary` reduced to ≤ 200 printable characters with whitespace
+    collapsed, attendee count excluding `self` (no addresses stored, D9), and Google's omitted
+    defaults restored (`status=confirmed`, `eventType=default`, `transparency=opaque`).
+    Empty strings and absent ends drop out through `sanitize_fields`/`coerce_fields`.
+    `FIELD_TYPES["Calendar Events"]` + a schema doc row (person-keyed tags) added;
+    `tests/fixtures/google_calendar_contract.json` holds 9 items → 7 reviewed expected rows;
+    `tests/test_architecture.py` now covers `google_calendar/mapper.py` (missing per-provider
+    mapper filenames are skipped). 180 → 191 tests. The cloud image still needs
+    `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
+- [x] **C1.6 Calendar provider + ingestion service + jobs** — blocked by: C1.2, C1.4, C1.5
   - Files: `app/providers/google_calendar/provider.py`, `app/providers/factory.py`
     (`create_calendar_provider(settings, timezone) -> provider | None`),
     `app/ingestion/service.py` (`calendar=None, calendar_repository=None` params,
@@ -218,8 +317,23 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
   - Done when: tests: window math across midnight, disabled → no calls, one calendar 403 does
     not block the next, missing/revoked token returns `[]` and logs once, points written
     through the calendar repository, never through the health repository.
-  - Notes:
-- [ ] **C1.7 Scheduler + worker wiring + setup docs** — blocked by: C1.6
+  - Notes: done: `app/providers/google_calendar/provider.py` adds `GoogleCalendarProvider`
+    (`fetch_events(start_date, end_date)`) turning whole local days into the half-open UTC
+    window Google expects (`local_date_boundary_utc(start)` → `local_date_boundary_utc(end + 1
+    day)`), looping `calendar_ids` through the `_available` pattern (403/404 or an exhausted
+    retry budget warns and skips that calendar only) and mapping each page with `map_events`;
+    an `AuthenticationError` anywhere in the loop returns `[]` and logs *not connected* once
+    per state change, so health collection is never affected. `create_calendar_provider(
+    settings, timezone)` returns `None` while `CALENDAR_SYNC_ENABLED` is false and otherwise
+    builds token manager + transport + client **without** refreshing at startup (the token file
+    may not exist yet). `IngestionService` takes optional `calendar` / `calendar_repository` and
+    `sync_calendar(start, end)` writes only through the calendar repository (`False` when either
+    is absent); `IngestionJobs.calendar_dates()` / `sync_calendar()` roll the
+    `[today − back, today + ahead]` window in the provider timezone, `initial_sync` runs it once
+    and `bulk_sync` covers the manual range once. Scheduler registration stays with C1.7.
+    191 → 204 tests. The cloud image still needs `pip install cffi` on top of
+    `requirements-dev.txt` (see C1.1).
+- [x] **C1.7 Scheduler + worker wiring + setup docs** — blocked by: C1.6
   - Files: `app/ingestion/scheduler.py`, `app/worker/main.py`, `tests/test_ingestion_schedule.py`,
     `tests/test_worker_entrypoint.py`, `docs/CALENDAR_SYNC.md`, `README.md`.
   - Do: `register()` adds `every(15).minutes.do(_run_job, jobs.sync_calendar)` only when the
@@ -235,8 +349,21 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
   - Done when: cadence test asserts 10 jobs without calendar and 11 with; entrypoint test shows
     both calendar `close` callbacks on exit; `docker compose config --quiet` passes (skip with
     a note if Docker is unavailable in the run environment).
-  - Notes:
-- [ ] **C1.8 Connect and callback API** — blocked by: C1.3
+  - Notes: done: `IngestionScheduler.register()` adds
+    `every(15).minutes.do(_run_job, jobs.sync_calendar)` only when the ingestion service holds a
+    calendar provider (10 jobs without, 11 with), registered beside the other periodic jobs so a
+    manual/bulk stack does not poll. `app/worker/main.py` builds the calendar provider after the
+    health provider (`create_calendar_provider(settings, provider.timezone)`, `None` while
+    disabled) and then a second `InfluxHealthRepository` with its own client and person-keyed
+    common tags (`Provider=google_calendar`, `Device=Google Calendar`, `DeviceId=google_calendar`,
+    D4); both `close` callbacks join the health resources on the same `ExitStack`, so a scheduling
+    failure still closes all four. `docs/CALENDAR_SYNC.md` gains "Running it with Docker" (connect,
+    enable, `docker compose up -d fitbit-fetch-data`, expected log lines, the `Calendar Events`
+    query) and a Troubleshooting section; README lists 23 measurements and points at the doc.
+    `docker compose config --quiet` passes in the cloud image (the Docker CLI is present; config
+    validation needs no daemon). 204 → 207 tests. The cloud image still needs `pip install cffi`
+    on top of `requirements-dev.txt` (see C1.1).
+- [x] **C1.8 Connect and callback API** — blocked by: C1.3
   - Files: `app/core/config.py` (API `Settings`), `app/api/routes/calendar.py` (new),
     `app/api/calendar_connect.py` (new: nonce store + orchestration), `app/api/main.py`
     (router, `app.state.calendar_connect`), `compose.yml` (`ai-api`), `Dockerfile.api`,
@@ -264,11 +391,28 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     503 when unconfigured; secret never appears in any response. Docs: connect walkthrough
     (`curl -H "Authorization: Bearer $AI_API_TOKEN" http://127.0.0.1:8000/api/calendar/connect`,
     open the URL, land on the callback). `[manual-verify]` uid alignment in C5.3.
-  - Notes:
+  - Notes: done: API `Settings` gains `calendar_client_id` / `calendar_client_secret`
+    (`GOOGLE_*` fallback, `repr=False`, in the `configure_logging` secrets tuple),
+    `calendar_token_file_path`, `calendar_redirect_uri` and `calendar_ids`, all optional.
+    `app/api/calendar_connect.py` holds `CalendarConnectService`: `begin()` mints a
+    `secrets.token_urlsafe(32)` nonce (10-minute TTL, at most 10 pending, oldest evicted) and
+    returns the D2 read-only authorization URL; `complete(state, code, error)` rejects an
+    unknown, expired, replayed or Google-denied response with `400 CALENDAR_CONNECT_REJECTED`
+    before any exchange, then exchanges the code and saves through
+    `GoogleCalendarTokenManager._save` (atomic, `0600`) via a small `CalendarTokenSettings`
+    adapter — the API `Settings` stays free of collector fields. Unconfigured → `503
+    CALENDAR_NOT_CONFIGURED` on both endpoints. `app/api/routes/calendar.py` adds `GET
+    /api/calendar/connect` (bearer) and the bearer-less `GET /api/calendar/callback` (plain
+    text, no token, code or secret in any response); `app/api/main.py` builds the service in
+    the lifespan with its session closed on the same `ExitStack`. Compose gives `ai-api` the
+    read-write `./tokens` mount, the calendar env vars and `user: "${API_UID:-10001}"`, with
+    `Dockerfile.api` taking a matching `ARG API_UID`; `docker compose config --quiet` passes.
+    207 → 213 tests. The cloud image still needs `pip install cffi` on top of
+    `requirements-dev.txt` (see C1.1).
 
 ### C2 Read API: events with vitals
 
-- [ ] **C2.1 Read layer: buckets + calendar tags + raw route** — blocked by: C1.5
+- [x] **C2.1 Read layer: buckets + calendar tags + raw route** — blocked by: C1.5
   - Files: `app/storage/influx/queries.py`, `app/api/health_service.py`, `docs/HEALTH_API.md`,
     `tests/test_health_routes.py`, `tests/test_ai_influx.py`.
   - Do: `InfluxService.query(measurement, start, end, bucket="1h")`; intraday `GROUP BY
@@ -280,8 +424,19 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     ("Calendar Events",)` → `GET /api/health/calendar` exists through the existing route factory.
   - Done when: SQL assertions for bucket, calendar identity and tag columns; route test
     parametrization includes `calendar`; docs table row.
-  - Notes:
-- [ ] **C2.2 Pure per-event vitals** — blocked by: none
+  - Notes: done: `InfluxService.query` takes `bucket="1h"`, validated against
+    `[1-9][0-9]{0,2}m|1h` before anything is sent, and drives `GROUP BY time(<bucket>)` for the
+    intraday measurements (unchanged hourly default, so existing callers keep their SQL). A new
+    `_identity(measurement)` helper builds the `WHERE` identity once: `Calendar Events` filters on
+    `UserId` + `Provider = 'google_calendar'` only (no `DeviceId`, D4) and appends the tag columns
+    `CalendarId`, `EventId` to the stored field list, exactly as `Activity Records` appends
+    `ActivityName`. `latest_calendar_event()` and `latest_device_observation()` now share a
+    `_latest()` helper (`ORDER BY time DESC LIMIT 1`, newest row across tag sets, redacted
+    `DataUnavailable` on failure). `HEALTH_MEASUREMENTS["calendar"] = ("Calendar Events",)` gives
+    `GET /api/health/calendar` through the existing route factory; `docs/HEALTH_API.md` gains the
+    route row plus the person-keyed identity note. 213 → 223 tests. The cloud image still needs
+    `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
+- [x] **C2.2 Pure per-event vitals** — blocked by: none
   - Files: `app/calendar/__init__.py`, `app/calendar/vitals.py`, `tests/test_calendar_vitals.py`.
   - Do: `bucket_minutes(days)` (D6). `usable_events(rows)`: dedupe by `EventId` keeping max
     `updated`; drop `cancelled`, `isAllDay`, `transparent`, duration < `MIN_EVENT_MINUTES`.
@@ -296,8 +451,23 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     `CONTEXT_MINUTES=30`.
   - Done when: tests on synthetic buckets: exact weighted mean, boundary buckets, confound
     flag both ways, low coverage → `None`, dedupe keeps the newest row and drops cancelled.
-  - Notes:
-- [ ] **C2.3 `GET /api/calendar/events`** — blocked by: C2.1, C2.2
+  - Notes: done: `app/calendar/vitals.py` (new pure package, no I/O — it reuses `number` and
+    `percent` from `app.ai.analytics` and nothing else from the app) adds `bucket_minutes(days)`
+    (7d → 1m, 30d → 3m, 90d → 7m, every period ≤ 190 d under the 20 000-row cap),
+    `usable_events(rows)` (dedupe by `EventId` keeping the newest `updated` **before** filtering,
+    so a newer cancellation removes the event instead of resurrecting its stale row; then drops
+    cancelled, all-day, `transparent` and sub-`MIN_EVENT_MINUTES` events, ordered by start) and
+    `event_vitals(event, hr_buckets, step_buckets, workouts, resting_hr, bucket_minutes=1)`
+    returning `(vitals | None, notes)`. A bucket counts for the window holding its midpoint —
+    hence the extra `bucket_minutes` argument, which the read layer's `GROUP BY time()` width
+    supplies and cannot be inferred from a row. `coverage_pct` = covered ÷ expected buckets
+    (capped at 100); below `MIN_COVERAGE_PCT` the vitals are `None` plus the coverage note.
+    `steps` stays `None` when no step bucket overlaps (no data ≠ zero steps), so
+    `movement_confounded` then rests on an overlapping `Activity Records` row alone. Event and
+    workout spans share one `startTime`/`endTime`-then-duration helper. Knob constants carry the
+    `# ponytail:` comments the item asked for. 223 → 237 tests. The cloud image still needs
+    `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
+- [x] **C2.3 `GET /api/calendar/events`** — blocked by: C2.1, C2.2
   - Files: `app/api/schemas/calendar.py`, `app/api/calendar_service.py`,
     `app/api/routes/calendar.py`, `app/api/main.py` (router + `app.state.calendar`),
     `app/api/dependencies.py`, `docs/CALENDAR_SYNC.md` (API section), `tests/test_calendar_routes.py`.
@@ -312,8 +482,25 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     (`INVALID_HEALTH_PERIOD` 422, `HEALTH_QUERY_TOO_LARGE` 422, `DATA_SERVICE_UNAVAILABLE` 503).
   - Done when: TestClient tests: 401, empty period, vitals computed from mocked rows, unknown
     query param → 422, no secret text in errors.
-  - Notes:
-- [ ] **C2.4 Connection status + disconnect** — blocked by: C1.8, C2.1
+  - Notes: done: the period rules moved out of `HealthReadService._interval` into
+    `app.api.health_service.resolve_interval(settings, clock, period)`, which now also returns
+    the day count the calendar route needs for `bucket_minutes(days)`; the health service calls
+    it and is otherwise untouched. `app/api/calendar_service.py` adds `CalendarReadService`
+    (`app.state.calendar`, `get_calendar` dependency): it reads `Calendar Events` for the period,
+    keeps `usable_events` only and — just for those — reads `HeartRate_Intraday` and
+    `Steps_Intraday` at `bucket=<bucket_minutes(days)>m`, `Activity Records` and `RestingHR`,
+    padding the vitals reads by `CONTEXT_MINUTES` at both ends (worst case 83 d → 19 930 of the
+    20 000 rows, so the cap still holds) and the `RestingHR` read by
+    `BASELINE_MAX_AGE_DAYS = 7` days back. The baseline is the resting rate of the event's local
+    day, else the nearest within seven days, else `None` (which `event_vitals` reports as a
+    note). A period with no readable event issues no vitals reads at all. `GET
+    /api/calendar/events` reuses `HealthQuery` (so an unknown parameter is still 422) and the
+    health error codes; `app/api/schemas/calendar.py` holds the strict (`extra=forbid`,
+    `strict=True`) `CalendarEventsResponse` / `CalendarEvent` / `EventVitals`, so a drift between
+    `event_vitals` and the contract fails loudly instead of leaking a field.
+    `docs/CALENDAR_SYNC.md` gains an Endpoints section. 237 → 244 tests. The cloud image still
+    needs `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
+- [x] **C2.4 Connection status + disconnect** — blocked by: C1.8, C2.1
   - Files: `app/api/routes/calendar.py`, `app/api/calendar_connect.py`,
     `app/api/schemas/calendar.py`, `docs/CALENDAR_SYNC.md`, `tests/test_calendar_connect_routes.py`.
   - Do: `GET /api/calendar/status` (bearer) → `{connected: bool (token file exists with a
@@ -323,11 +510,24 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     `CALENDAR_NOT_CONNECTED` when no file. Worker notices the deletion on its next cycle (D2).
   - Done when: tests: status reflects file presence and Influx row; disconnect deletes the
     file, calls revoke once, is idempotent-safe (second call 404); no secrets in responses.
-  - Notes:
+  - Notes: done: `CalendarConnectService` gains `status(repository)` and `disconnect()`.
+    `status` reads the token file itself (`connected` = a non-empty `refresh_token` in it,
+    `token_saved_at` = its `saved_at_utc`) and never raises: it answers `configured: false`
+    on an unconfigured server instead of `503`, and reports `last_event_start: null` — from
+    `latest_calendar_event()`'s point time, the event start per the data contract — when
+    nothing is synced yet or InfluxDB is unreadable, so the connection state never depends on
+    the store. `disconnect()` is `404 CALENDAR_NOT_CONNECTED` without a token file, otherwise
+    revokes the refresh token best effort (a refusal still disconnects) and unlinks the file;
+    the worker notices on its next cycle (D2). `GET /api/calendar/status` (bearer, strict
+    `CalendarStatusResponse`) takes the repository through the existing `get_influx`
+    dependency, so `app/api/main.py` is untouched, and `DELETE /api/calendar/connection`
+    (bearer) answers `204` with no body. Neither response can carry a token or the client
+    secret. `docs/CALENDAR_SYNC.md` documents both in the connect table. 244 → 247 tests.
+    The cloud image still needs `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
 
 ### C3 Deterministic insights
 
-- [ ] **C3.1 Daily load + correlations** — blocked by: C2.2
+- [x] **C3.1 Daily load + correlations** — blocked by: C2.2
   - Files: `app/calendar/insights.py`, `tests/test_calendar_insights.py`.
   - Do: `daily_load(events, zone)` per local date: `event_count`, `meeting_count`
     (attendees ≥ 1), `meeting_minutes`, `event_minutes`, `back_to_back_count` (gap ≤ 5 min),
@@ -341,8 +541,28 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     `app.ai.analytics.analyze()["metrics"][name]["daily"]` — reuse, never re-derive.
   - Done when: tests with 30 synthetic days: known `r`, next-day shift, insufficient-data
     path, tercile math.
-  - Notes:
-- [ ] **C3.2 Series, time-of-day and top events** — blocked by: C2.2
+  - Notes: done: `app/calendar/insights.py` (pure, same rule as `vitals.py` — it reuses
+    `average`/`number`/`percent` from `app.ai.analytics` and `event_window` from
+    `app.calendar.vitals`, nothing else) adds `daily_load(events, zone)` keyed by ISO local
+    date like an `analyze()` series: `event_count`, `meeting_count` /
+    `meeting_minutes` (`attendees >= MIN_MEETING_ATTENDEES`, an absent count is a personal
+    block), `event_minutes`, `back_to_back_count` (gap `<= BACK_TO_BACK_GAP_MINUTES`, so
+    overlaps count too) and `first_event_hour` / `last_event_hour` as fractional local hours
+    of the first and last **start**. A day is the local date of the event's start, so a
+    23:30 UTC event belongs to the next Berlin day. `daily_series(metrics)` lifts
+    `analyze()["metrics"][name]["daily"]` for the eight correlated metrics (never
+    re-derived), and `correlate` / `tercile_comparison` share one pairing helper, both
+    reporting `same_day` and `next_day` per metric — sleep, HRV and resting heart rate are
+    next-morning measurements (D7), and a tercile on same-day sleep would compare a busy day
+    against the night before it. `correlate` → `{r, n, insufficient_data}` with
+    `n < MIN_CORRELATION_DAYS` short-circuited and a metric that never moves reported as
+    `r: null` (`statistics.correlation` refuses a constant series). `tercile_comparison`
+    sorts the pairs by meeting minutes, takes `len // 3` from each end (both thirds' metric
+    and meeting-minute means, `difference`, `percent`) and reports `insufficient_data` below
+    `MIN_TERCILE_DAYS`; both branches carry the same keys, so the C3.3 schema cannot drift.
+    Knob constants carry `# ponytail:` comments. 247 → 261 tests. The cloud image still needs
+    `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
+- [x] **C3.2 Series, time-of-day and top events** — blocked by: C2.2
   - Files: `app/calendar/insights.py`, `tests/test_calendar_insights.py`.
   - Do: `series_summary(events_with_vitals)`: group by `recurring_event_id`, else normalized
     summary (lowercase, whitespace collapsed); per group `title`, `occurrences`, `with_vitals`,
@@ -350,8 +570,30 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     among groups with ≥ 3 usable occurrences. `time_of_day(...)`: morning < 12, afternoon
     12–17, evening ≥ 17 → mean elevation + `n`. `top_events(...)`: 5 highest non-confounded.
   - Done when: tests: grouping fallback, rank threshold, buckets, confounded excluded.
-  - Notes:
-- [ ] **C3.3 `GET /api/calendar/insights`** — blocked by: C2.3, C3.1, C3.2
+  - Notes: done: `app/calendar/insights.py` (still pure) adds `series_summary(events)`,
+    `time_of_day(events, zone)` and `top_events(events, limit=TOP_EVENT_COUNT)`. All three take
+    the same input: stored `Calendar Events` rows, each carrying the `event_vitals` dict its
+    reader computed under a `"vitals"` key (`None` when the buckets did not cover the event) —
+    the shape `CalendarReadService._events` already holds per event, so C3.3 passes rows
+    straight through without a second vitals pass. Rows without a usable window are skipped
+    exactly as in `daily_load`. Grouping is `recurringEventId`, else the whitespace-collapsed
+    lowercase summary, else the event id alone, so untitled one-offs never clump together;
+    a group reports `title` (the first occurrence's summary, whitespace collapsed),
+    `occurrences`, `with_vitals`, `mean_hr_vs_resting_pct`, `mean_recovery_delta` and
+    `confounded_count`. Groups with `with_vitals >= MIN_SERIES_OCCURRENCES = 3` and a numeric
+    mean rank first by elevation (descending); the rest trail by how often they recur, so the
+    C3.3 "top 10" slice is always the ranked ones first — confounded occurrences stay in the
+    mean and are counted beside it, since one walking instance should not silently reshape a
+    series. `time_of_day` buckets on the **local** start hour (`morning < 12`, `afternoon`
+    12–17, `evening >= 17`) and reports `mean_hr_vs_resting_pct` plus the `n` backing it, so a
+    bucket without a single elevation reads `{null, 0}` rather than disappearing. `top_events`
+    drops events without vitals, without an elevation or flagged `movement_confounded`, then
+    returns the five steepest (ties by start) as `event_id`, `title`, `start` (aware UTC
+    datetime, ready for the strict `AwareDatetime` schema), `duration_minutes`, `attendees`,
+    `mean_hr`, `hr_vs_resting_pct`, `recovery_delta`. Knob constants carry `# ponytail:`
+    comments. 261 → 272 tests. The cloud image still needs `pip install cffi` on top of
+    `requirements-dev.txt` (see C1.1).
+- [x] **C3.3 `GET /api/calendar/insights`** — blocked by: C2.3, C3.1, C3.2
   - Files: `app/api/routes/calendar.py`, `app/api/calendar_service.py`,
     `app/api/schemas/calendar.py`, `docs/CALENDAR_SYNC.md`, `tests/test_calendar_routes.py`.
   - Do: `?period=30d` (default `AI_DEFAULT_ANALYSIS_DAYS`, max `AI_MAX_ANALYSIS_DAYS`).
@@ -360,11 +602,27 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     (fixed strings: HR elevation is a stress proxy, not a measurement; correlation is not
     causation; movement, caffeine, illness confound HR; coverage gaps listed).
   - Done when: TestClient tests incl. empty data → 200 with empty sections; docs section.
-  - Notes:
+  - Notes: done: `CalendarReadService._events` split into `_readings` (stored rows carrying the
+    `event_vitals` dict and notes its reader computed) and the response mapping, so
+    `GET /api/calendar/insights` runs `daily_load`, `series_summary`, `time_of_day` and
+    `top_events` over exactly the rows `/api/calendar/events` already builds — one vitals pass,
+    no second read. `CalendarReadService.insights(period)` reuses `resolve_interval` (same period
+    rules, same health error codes) and takes the correlated daily series from
+    `analyze(fetch(INSIGHT_MEASUREMENTS, window.query_start, window.now), Window(days, ...))`,
+    never re-deriving them (C3.1); a period without a readable event issues no metric read at all
+    and answers `200` with empty sections. The response is the strict
+    `CalendarInsightsResponse`: `period` (`start`, `end`, `timezone`, `days`, `bucket_minutes`),
+    `days_with_events`, `daily_load[]` (the last `DAILY_LOAD_DAYS = 14` days with events),
+    `correlations{}` and `tercile_comparison{}` (both `same_day` + `next_day` per metric, in
+    separate `ShiftedCorrelation` / `ShiftedTerciles` models so the two cannot drift into each
+    other), `series[]` (top 10), `time_of_day{}`, `top_events[]` and `caveats[]` — three fixed
+    strings plus a count of the events heart rate could not cover. `docs/CALENDAR_SYNC.md` gains
+    the endpoint row and a field table. 272 → 277 tests. The cloud image still needs
+    `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
 
 ### C4 Gemini
 
-- [ ] **C4.1 Calendar focus category and context** — blocked by: C3.3
+- [x] **C4.1 Calendar focus category and context** — blocked by: C3.3
   - Files: `app/api/schemas/ai.py` (`Category` + `"calendar"`), `app/ai/context.py`
     (`GROUPS`, `KEYWORDS`, `PRIMARY`, calendar section), `app/ai/service.py` (when
     `"calendar"` in focus: compute insights through the calendar service and inject
@@ -385,25 +643,63 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
   - Done when: tests: focus `calendar` builds the section; `classify("how do meetings affect
     my sleep")` → `calendar` + `sleep`; titles toggle; validator accepts a supported claim and
     rejects an unsupported "meetings" claim.
-  - Notes:
-- [ ] **C4.2 `POST /api/ai/calendar` + docs** — blocked by: C4.1
+  - Notes: done: `Category` gains `"calendar"` (focus `max_length` 6 → 7) and `app/ai/context.py`
+    gains the `calendar` group, keyword pattern and `PRIMARY = {"Calendar Events"}`, so a period
+    without a readable event answers `INSUFFICIENT_DATA`. `calendar_context(insights,
+    include_titles)` (pure, in `context.py` — the privacy boundary) summarizes the C3.3 payload
+    into aggregates only: load (`days_with_events`, means over the days the insights report plus a
+    `coverage_note` saying so, busiest weekday by mean meeting minutes), correlations filtered to a
+    numeric `r` with `n >= MIN_CORRELATION_DAYS` (imported, never re-stated), the top 5 series as
+    `label` + means, `time_of_day` and the caveats. `top_events`, `tercile_comparison` and every
+    event id stay out (D9); with `CALENDAR_AI_INCLUDE_TITLES=false` the labels become
+    `series-1 …`. `AnalysisService` takes an optional `calendar` service and computes the insights
+    for the already-validated day count only when `"calendar"` is in focus; an `APIError` or
+    `DataUnavailable` from that read logs once and drops the section, so a calendar problem can
+    never fail a health analysis (D1) — `app/api/main.py` builds the read service before the
+    analysis service to pass it. Evidence keys `calendar_load` / `calendar_series` are appended
+    when the section carries them, and the validator's new
+    `\b(?:meeting|calendar|event)s?\b` term rejects a meetings claim without them. The prompt
+    gains one line: calendar heart-rate figures are a movement-confounded proxy, never a
+    diagnosis. `Settings.calendar_ai_include_titles` (`CALENDAR_AI_INCLUDE_TITLES`, default true)
+    is in `.env.example` and the `ai-api` compose env. 277 → 287 tests. The cloud image still
+    needs `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
+- [x] **C4.2 `POST /api/ai/calendar` + docs** — blocked by: C4.1
   - Files: `app/api/routes/ai.py` (add `"calendar"` to the specialized loop),
     `tests/test_api_structure.py`, `tests/test_ai_routes.py`, `docs/AI_BACKEND.md`
     (table row + limits bullet), `docs/CALENDAR_SYNC.md`.
   - Done when: path in OpenAPI; route test with mocked Gemini; docs updated.
-  - Notes:
+  - Notes: done: `"calendar"` joins the specialized loop in `app/api/routes/ai.py`, so
+    `POST /api/ai/calendar` is one word of diff — the route runs `AnalysisService.run(body,
+    "calendar", user)` like its four siblings, which sets `focus = ["calendar"]` and reaches
+    the C4.1 context path unchanged. No new schema: `Category` already carries `"calendar"`
+    and a specialized route builds its own focus rather than validating a supplied one. Route
+    tests use the existing fixture with a mocked calendar service: the success case asserts
+    the period reaches `insights("7d")` and that the prepared context Gemini receives has a
+    `calendar` section; the empty case asserts `days_with_events: 0` answers
+    `422 INSUFFICIENT_DATA` without calling Gemini (`PRIMARY["calendar"]`). `docs/AI_BACKEND.md`
+    gains the endpoint row, `calendar` in the focus list and a limits bullet (aggregates only,
+    titles toggle, `INSUFFICIENT_DATA` without events, an unreadable calendar never fails an
+    analysis, proxy not diagnosis); `docs/CALENDAR_SYNC.md` gains the endpoint row, a
+    `POST /api/ai/calendar` subsection under the insights section and the
+    `CALENDAR_AI_INCLUDE_TITLES` env row its text refers to. 287 → 289 tests. The cloud image
+    still needs `pip install cffi` on top of `requirements-dev.txt` (see C1.1).
 
 ### C5 Ops and docs
 
-- [ ] **C5.1 Grafana annotations** — blocked by: C1.7
+- [x] **C5.1 Grafana annotations** — blocked by: C1.7
   - Files: `docs/CALENDAR_SYNC.md` (Grafana section).
   - Do: document an InfluxQL annotation query overlaying events on the heart-rate panel:
     `SELECT "summary" AS text, "EventId" AS tags FROM "Calendar Events" WHERE $timeFilter AND
     "status" = 'confirmed' AND "isAllDay" = false`, with the datasource field mapping steps.
     Dashboard JSON export only if a live Grafana is available (`[manual]` otherwise).
   - Done when: section present; query verified on the local stack or marked unverified.
-  - Notes:
-- [ ] **C5.2 Docs consistency pass** — blocked by: C2.4, C4.2
+  - Notes: done: `## Grafana annotations` section in `docs/CALENDAR_SYNC.md` — the InfluxQL
+    annotation query, datasource/field-mapping steps, per-panel filtering, and `WHERE` variants.
+    Marked **unverified**: the cloud run has no Grafana or InfluxDB, so the query was written
+    from `docs/influxdb_schema.md` and never executed; no dashboard JSON exported. Running it
+    live belongs to C5.3. Docs only, no code touched; 289 tests still pass (cloud image needs
+    `pip install cffi` on top of `requirements-dev.txt`, as C1.1 notes).
+- [x] **C5.2 Docs consistency pass** — blocked by: C2.4, C4.2
   - Files: `README.md`, `docs/CALENDAR_SYNC.md`, `docs/influxdb_schema.md`, `docs/HEALTH_API.md`,
     `docs/AI_BACKEND.md`, `.env.example`, `compose.yml`.
   - Do: every calendar env var in code appears in `.env.example`, `compose.yml` and the doc's
@@ -411,7 +707,37 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     Env, Sync policy, Schema, Endpoints, Privacy, Limits, Troubleshooting. `docs/refactor_contracts.md`
     untouched.
   - Done when: grep of `CALENDAR_` across code and docs matches; no contradictions.
-  - Notes:
+  - Notes: done: the pass is enforced by `tests/test_docs_consistency.py`, which derives the
+    `CALENDAR_*` names from `os.getenv`/`os.environ.get` in `app/` and `scripts/` and asserts
+    each one appears in `.env.example`, `compose.yml` and `docs/CALENDAR_SYNC.md`, that
+    `.env.example` declares every key once and declares no calendar key the code does not read,
+    that every `calendar` path in the app's OpenAPI schema appears in a docs table, and that
+    `docs/CALENDAR_SYNC.md` carries Setup, Sync policy, Schema, Endpoints, Privacy, Limits,
+    Troubleshooting and Environment. Five gaps it found are fixed: `CALENDAR_API_BASE_URL` was
+    in `app/core/config.py` but in neither `.env.example` nor `compose.yml` (added to both, as
+    a collector-only var); `.env.example` ended with a stray `# Googe Calendar token` block
+    declaring unused `GOOGLE_CALENDAR_ACCESS_TOKEN`/`GOOGLE_CALENDAR_REFRESH_TOKEN` (tokens
+    live in the token file per D2, never in env) plus a second
+    `CALENDAR_SYNC_ENABLED=true` contradicting the `false` above it (block removed);
+    `docs/CALENDAR_SYNC.md` had no `Sync policy`, `Schema` or `Limits` section (added — the
+    policy paragraph moved out of the Docker section and expanded with the D5 request params,
+    the 250×50 pagination cap, why no `syncToken`, and the cancelled/re-sync/moved-event rules;
+    Schema restates the D4 tags, timestamp rule and fields and points at
+    `docs/influxdb_schema.md` as canonical; Limits collects the one-person ceiling, per-cycle
+    and per-read caps, which events get vitals, the evidence thresholds, the D7 proxy caveat,
+    the nonce TTL and the Testing-mode expiry); `docs/AI_BACKEND.md` still claimed the API runs
+    with "no host data mounts", which C1.8 changed (now states the `./tokens` mount and lists
+    the calendar vars the API reads); and Troubleshooting pointed at `SCHEDULE_AUTO_UPDATE` as
+    if it were an env var when it is derived from `AUTO_DATE_RANGE`. Also: the env table gained
+    a "Read by" column (collector / API / both) and a note on the two
+    `CALENDAR_TOKEN_FILE_PATH` defaults; `README.md` gained the optional calendar env block and
+    the `ai-api` row in the service table; the Setup and Troubleshooting notes on *In
+    production* now match what C0.1 recorded (branding must be completed first) instead of
+    "personal use needs no verification". `docs/refactor_contracts.md`,
+    `docs/influxdb_schema.md` and `docs/HEALTH_API.md` are unchanged — their calendar rows were
+    already right. Docs, `.env.example` and `compose.yml` only; no application code touched.
+    289 → 294 tests (cloud image needs `pip install cffi` on top of `requirements-dev.txt`,
+    as C1.1 notes).
 - [ ] **C5.3 Live verification on the Docker stack** `[manual]` — blocked by: C5.2
   - Do: `docker compose build fitbit-fetch-data ai-api`; set `CALENDAR_SYNC_ENABLED=true`;
     `docker compose up -d`; verify uid alignment (`docker compose exec fitbit-fetch-data id -u`
@@ -426,7 +752,7 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
 
 ### C6 Optional real stress score
 
-- [ ] **C6.1 Google Health `Stress Score` measurement** — blocked by: C0.2 (`available`), C3.1
+- [x] **C6.1 Google Health `Stress Score` measurement** — blocked by: C0.2 (`available`), C3.1
   - Files: `app/providers/google_health/vitals.py`, `app/providers/google_health/provider.py`
     (`_vitals` group), `app/domain/measurements.py`, `docs/influxdb_schema.md`,
     `app/ai/analytics.py` (`FIELDS["stress_score"]`, category `recovery`),
@@ -437,11 +763,14 @@ Format: `- [ ] **ID Title** — blocked by: …` then Files / Do / Done when / N
     documented gap). Pure mapper, parity fixture, provider test.
   - Done when: tests green; docs list the measurement; insights correlate meeting load vs stress.
     If C0.2 says `unavailable`: tick with Notes `unavailable`, keep D7 wording in docs.
-  - Notes:
+  - Notes: `unavailable` — skipped per C0.2 verification on 2026-09-08. No supported
+    Google Health stress data type exists in the checked catalogue/discovery schema;
+    no `Stress Score` measurement implemented. D7 proxy wording remains unchanged.
+
 
 ## Dependency order
 
-```
+```text
 C1.1 → C1.2 → C1.3 → C1.8 ┐
 C1.1 → C1.4 ┐             ├→ C2.4 ┐
 C1.5 ───────┼→ C1.6 → C1.7 → C5.1 │

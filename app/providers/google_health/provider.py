@@ -15,6 +15,7 @@ from app.providers.google_health import (
     intraday,
     spo2,
     workouts,
+    cardiac,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,18 @@ class GoogleHealthProvider:
         return (
             self._available(
                 kind, self.client.get_google_datapoints_for_date_range, kind, start, end
+            )
+            or []
+        )
+
+    def _session_range(self, kind, start, end):
+        return (
+            self._available(
+                kind,
+                self.client.get_google_session_datapoints_for_date_range,
+                kind,
+                start,
+                end,
             )
             or []
         )
@@ -99,6 +112,19 @@ class GoogleHealthProvider:
             records.extend(
                 mapper(
                     {kind: self._range(kind, start, end)},
+                    start,
+                    end,
+                    self.device_name,
+                    self.timezone,
+                )
+            )
+        for kind, mapper in (
+            ("electrocardiogram", cardiac.map_ecg),
+            ("irregular-rhythm-notification", cardiac.map_irn),
+        ):
+            records.extend(
+                mapper(
+                    {kind: self._session_range(kind, start, end)},
                     start,
                     end,
                     self.device_name,

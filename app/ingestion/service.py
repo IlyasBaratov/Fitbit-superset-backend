@@ -11,8 +11,11 @@ class IngestionService:
         provider: HealthProvider,
         repository: HealthRepository,
         metadata: DeviceMetadataState,
+        calendar=None,
+        calendar_repository: HealthRepository | None = None,
     ):
         self.provider, self.repository, self.metadata = provider, repository, metadata
+        self.calendar, self.calendar_repository = calendar, calendar_repository
 
     def sync_intraday(self, date: str) -> bool:
         return self.repository.write(self.provider.fetch_intraday(date))
@@ -25,6 +28,12 @@ class IngestionService:
 
     def sync_battery(self) -> bool:
         return self.repository.write(self.provider.fetch_battery())
+
+    def sync_calendar(self, start: str, end: str) -> bool:
+        """Calendar points are person-keyed, so they never reach the device repository (D4)."""
+        if self.calendar is None or self.calendar_repository is None:
+            return False
+        return self.calendar_repository.write(self.calendar.fetch_events(start, end))
 
     def sync_device_metadata(self) -> None:
         for point in self.provider.fetch_device_metadata():
