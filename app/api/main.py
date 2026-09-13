@@ -9,7 +9,9 @@ from app.errors import APIError
 from app.ai.service import AnalysisService
 from app.ai.gemini import GeminiService
 from app.storage.influx.queries import InfluxService
-from app.api.routes import ai, system, health
+from app.api.routes import ai, system, health, calendar
+from app.api.calendar_connect import CalendarConnectService
+from app.api.calendar_service import CalendarReadService
 from app.api.health_service import HealthReadService
 
 
@@ -19,7 +21,12 @@ def create_app(settings=None, influx=None, gemini=None, clock=None):
         cfg = settings or Settings.from_env()
         if settings is None:
             configure_logging(
-                secrets=(cfg.api_token, cfg.gemini_key, cfg.influx_password)
+                secrets=(
+                    cfg.api_token,
+                    cfg.gemini_key,
+                    cfg.influx_password,
+                    cfg.calendar_client_secret,
+                )
             )
         with ExitStack() as resources:
             db = influx if influx is not None else InfluxService(cfg)
@@ -31,8 +38,12 @@ def create_app(settings=None, influx=None, gemini=None, clock=None):
             app.state.settings = cfg
             app.state.influx = db
             app.state.clock = clock
-            app.state.analysis = AnalysisService(cfg, db, llm, clock)
+            app.state.calendar = CalendarReadService(cfg, db, clock)
+            app.state.analysis = AnalysisService(cfg, db, llm, clock, app.state.calendar)
             app.state.health = HealthReadService(cfg, db, clock)
+            connect = CalendarConnectService(cfg, clock=clock)
+            resources.callback(connect.close)
+            app.state.calendar_connect = connect
             yield
 
     app = FastAPI(title="Wearable AI API", lifespan=lifespan)
@@ -48,6 +59,7 @@ def create_app(settings=None, influx=None, gemini=None, clock=None):
     app.include_router(system.router)
     app.include_router(ai.router)
     app.include_router(health.router)
+    app.include_router(calendar.router)
     return app
 
 

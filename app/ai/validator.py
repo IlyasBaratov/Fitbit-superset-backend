@@ -21,6 +21,7 @@ METRIC_TERMS = {
     r"\b(?:skin temperature|temperature deviation)\b": {"skin_temperature_deviation"},
     r"\b(?:deep sleep|rem sleep)\b": {"deep_minutes", "rem_minutes", "deep_sleep_percent", "rem_percent"},
     r"\b(?:weight|bmi)\b": {"weight", "bmi"},
+    r"\b(?:meeting|calendar|event)s?\b": {"calendar_load", "calendar_series"},
 }
 ABSENCE = re.compile(r"missing|unavailable|not (?:available|provided|supplied)|no (?:data|measurements)|cannot|can't|insufficient", re.I)
 

@@ -13,3 +13,7 @@ def get_influx(request: Request):
 
 def get_health(request: Request):
     return request.app.state.health
+
+
+def get_calendar(request: Request):
+    return request.app.state.calendar

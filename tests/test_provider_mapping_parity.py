@@ -22,6 +22,7 @@ def test_original_worker_measurement_parity(monkeypatch, kind):
     if kind == "google":
         client.get_google_datapoints_for_date.side_effect = lambda key, *_: data["range"].get(key, [])
         client.get_google_datapoints_for_date_range.side_effect = lambda key, *_: data["range"].get(key, [])
+        client.get_google_session_datapoints_for_date_range.side_effect = lambda key, *_: data["range"].get(key, [])
         client.request_google_data_points_list.side_effect = lambda key, **_: data["list"].get(key, {})
         client.request_google_data_points_daily_rollup.side_effect = lambda key, *_: data["rollup"].get(key, {})
         provider = GoogleHealthProvider(cfg, client, pytz.utc)

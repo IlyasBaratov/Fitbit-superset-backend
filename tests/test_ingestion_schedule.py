@@ -19,7 +19,7 @@ def test_inclusive_bulk_windows_and_boundaries():
 
 def test_schedule_cadence_and_no_duplicates():
     settings = SimpleNamespace(schedule_auto_update=True, auto_update_date_range=1)
-    jobs = IngestionJobs(Mock(), settings, pytz.utc)
+    jobs = IngestionJobs(Mock(calendar=None), settings, pytz.utc)
     runner = IngestionScheduler(jobs, settings)
     runner.register()
     runner.register()
@@ -29,6 +29,47 @@ def test_schedule_cadence_and_no_duplicates():
     assert cadence.count((20, "minutes")) == 2
     assert cadence.count((6, "hours")) == 2
     assert (3, "minutes") in cadence
+    assert (15, "minutes") not in cadence
+
+
+def test_calendar_job_is_registered_only_when_a_calendar_is_connected():
+    settings = SimpleNamespace(schedule_auto_update=True, auto_update_date_range=1)
+    jobs = IngestionJobs(Mock(calendar=Mock()), settings, pytz.utc)
+    runner = IngestionScheduler(jobs, settings)
+    runner.register()
+    assert len(runner.scheduler.jobs) == 11
+    calendar_jobs = [j for j in runner.scheduler.jobs if (j.interval, j.unit) == (15, "minutes")]
+    assert len(calendar_jobs) == 1
+    assert calendar_jobs[0].job_func.args == (jobs.sync_calendar,)
+
+
+def test_calendar_window_follows_the_local_day():
+    now = [datetime(2026, 8, 21, 6, 59, tzinfo=timezone.utc)]
+    ingestion = Mock()
+    settings = SimpleNamespace(auto_update_date_range=1, calendar_sync_days_back=7, calendar_sync_days_ahead=1)
+    jobs = IngestionJobs(ingestion, settings, pytz.timezone("America/Los_Angeles"), lambda: now[0])
+    jobs.sync_calendar()
+    ingestion.sync_calendar.assert_called_with("2026-08-13", "2026-08-21")
+    now[0] = datetime(2026, 8, 21, 7, 1, tzinfo=timezone.utc)
+    jobs.sync_calendar()
+    ingestion.sync_calendar.assert_called_with("2026-08-14", "2026-08-22")
+
+
+def test_full_syncs_cover_the_calendar_once():
+    ingestion = Mock()
+    settings = SimpleNamespace(
+        auto_update_date_range=1,
+        calendar_sync_days_back=7,
+        calendar_sync_days_ahead=1,
+        manual_start_date="2026-08-01",
+        manual_end_date="2026-08-03",
+    )
+    clock = lambda: datetime(2026, 8, 21, 12, tzinfo=timezone.utc)
+    IngestionJobs(ingestion, settings, pytz.utc, clock).initial_sync()
+    ingestion.sync_calendar.assert_called_once_with("2026-08-14", "2026-08-22")
+    ingestion.reset_mock()
+    IngestionJobs(ingestion, settings, pytz.utc, clock).bulk_sync()
+    ingestion.sync_calendar.assert_called_once_with("2026-08-01", "2026-08-03")
 
 
 def test_jobs_recompute_dates_across_midnight():

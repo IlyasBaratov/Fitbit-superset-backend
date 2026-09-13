@@ -3,6 +3,7 @@ from collections import OrderedDict
 from datetime import datetime, timezone
 import hashlib
 import json
+import logging
 import re
 import threading
 import time
@@ -13,9 +14,12 @@ from app.storage.influx.queries import DataUnavailable
 from app.ai.gemini import GeminiUnavailable
 from app.ai.validator import InvalidAIOutput
 
+LOGGER = logging.getLogger(__name__)
+
 class AnalysisService:
-    def __init__(self, settings, influx, gemini, clock=None):
+    def __init__(self, settings, influx, gemini, clock=None, calendar=None):
         self.settings, self.influx, self.gemini = settings, influx, gemini
+        self.calendar = calendar
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.cache = OrderedDict()
         self.lock = threading.Lock()
@@ -45,7 +49,8 @@ class AnalysisService:
                 data = self.influx.fetch(measurements(focus), window.query_start, window.now)
             except DataUnavailable:
                 raise APIError("DATA_SERVICE_UNAVAILABLE", "Health data is temporarily unavailable.") from None
-            context, sufficient = build_context(data, window, focus)
+            context, sufficient = build_context(data, window, focus, self._calendar_insights(focus, days),
+                                                self.settings.calendar_ai_include_titles)
             if not sufficient:
                 raise APIError("INSUFFICIENT_DATA", "Not enough relevant data is available for this analysis.", 422)
             key = hashlib.sha256(json.dumps([user, self.settings.provider, self.settings.device_id, self.settings.model,
@@ -68,6 +73,17 @@ class AnalysisService:
             return response
         finally:
             self.lock.release()
+
+    def _calendar_insights(self, focus, days):
+        """The deterministic insights; an unreadable calendar never fails an analysis (D1)."""
+        if "calendar" not in focus or self.calendar is None:
+            return None
+        try:
+            insights = self.calendar.insights(f"{days}d")
+        except (APIError, DataUnavailable):
+            LOGGER.warning("calendar insights unavailable; continuing without calendar context")
+            return None
+        return insights.model_dump() if hasattr(insights, "model_dump") else insights
 
     def check(self):
         if not self.lock.acquire(timeout=1):

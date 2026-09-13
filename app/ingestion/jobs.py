@@ -15,8 +15,20 @@ class IngestionJobs:
             end - timedelta(days=self.settings.auto_update_date_range)
         ).isoformat(), end.isoformat()
 
+    def calendar_dates(self):
+        """Rolling window around today; a full re-sync replaces moved and cancelled events (D5)."""
+        today = self.clock().astimezone(self.timezone).date()
+        return (
+            today - timedelta(days=self.settings.calendar_sync_days_back)
+        ).isoformat(), (
+            today + timedelta(days=self.settings.calendar_sync_days_ahead)
+        ).isoformat()
+
     def sync_intraday(self):
         return self.ingestion.sync_intraday(self.dates()[1])
+
+    def sync_calendar(self):
+        return self.ingestion.sync_calendar(*self.calendar_dates())
 
     def sync_previous_day(self):
         previous = self.clock().astimezone(self.timezone).date() - timedelta(days=1)
@@ -37,6 +49,7 @@ class IngestionJobs:
         self.ingestion.sync_battery()
         self.ingestion.sync_device_metadata()
         self.ingestion.sync_workouts(end)
+        self.sync_calendar()
 
     def bulk_sync(self, run_pending=lambda: None):
         start, end = self.settings.manual_start_date, self.settings.manual_end_date
@@ -44,6 +57,7 @@ class IngestionJobs:
         self.ingestion.sync_device_metadata()
         self.ingestion.sync_workouts(end)
         self.ingestion.sync_daily_group("none", start, end)
+        self.ingestion.sync_calendar(start, end)
         run_pending()
         for group, gap in (("365d", 360), ("100d", 98), ("30d", 28)):
             for first, last in iter_windows(start, end, gap):

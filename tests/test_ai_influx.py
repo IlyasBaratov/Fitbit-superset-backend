@@ -32,6 +32,43 @@ def test_rejects_unbounded_or_unapproved_queries(service, measurement, days):
         service.query(measurement, end-timedelta(days=days), end)
     service.client.query.assert_not_called()
 
+def test_bucket_controls_intraday_grouping(service):
+    end = datetime.now(timezone.utc)
+    service.query("Steps_Intraday", end-timedelta(days=7), end, bucket="3m")
+    assert 'GROUP BY time(3m)' in service.client.query.call_args.args[0]
+
+@pytest.mark.parametrize("bucket", ["2h", "0m", "1000m", "1h ", "1m; DROP"])
+def test_rejects_unsupported_buckets(service, bucket):
+    end = datetime.now(timezone.utc)
+    with pytest.raises(ValueError):
+        service.query("Steps_Intraday", end-timedelta(days=1), end, bucket=bucket)
+    service.client.query.assert_not_called()
+
+def test_calendar_reads_are_person_keyed_with_tag_columns(service):
+    end = datetime.now(timezone.utc)
+    service.query("Calendar Events", end-timedelta(days=7), end)
+    sql = service.client.query.call_args.args[0]
+    assert '"UserId" = \'a\\\'b\\\\c\'' in sql
+    assert '"Provider" = \'google_calendar\'' in sql
+    assert '"DeviceId"' not in sql
+    assert '"CalendarId", "EventId"' in sql and '"summary"' in sql
+
+def test_latest_calendar_event_is_newest_person_row(service):
+    service.client.query.return_value.get_points.return_value = iter([
+        {"time": "2026-03-01T09:00:00Z", "EventId": "old"},
+        {"time": "2026-03-08T09:00:00Z", "EventId": "new"},
+    ])
+    assert service.latest_calendar_event()["EventId"] == "new"
+    sql = service.client.query.call_args.args[0]
+    assert 'FROM "Calendar Events"' in sql and "ORDER BY time DESC LIMIT 1" in sql
+    assert '"Provider" = \'google_calendar\'' in sql and '"DeviceId"' not in sql
+
+def test_latest_calendar_event_without_rows_and_on_failure(service):
+    assert service.latest_calendar_event() is None
+    service.client.query.side_effect = RuntimeError("secret")
+    with pytest.raises(DataUnavailable, match="retrieved"):
+        service.latest_calendar_event()
+
 def test_database_errors_are_redacted(service):
     service.client.query.side_effect = RuntimeError("secret")
     end = datetime.now(timezone.utc)

@@ -191,6 +191,73 @@ class GoogleHealthClient:
             current += timedelta(days=1)
         return aggregated
 
+    def get_google_session_datapoints_for_date_range(
+        self, data_type, start_date_str, end_date_str, page_size=1000
+    ):
+        """Fetch ECG/IRN sessions once, then enforce the requested local date range."""
+        start_local = self.timezone.localize(
+            datetime.strptime(start_date_str, "%Y-%m-%d")
+        )
+        end_local = self.timezone.localize(
+            datetime.strptime(end_date_str, "%Y-%m-%d") + timedelta(days=1)
+        )
+        start_utc = start_local.astimezone(pytz.utc)
+        end_utc = end_local.astimezone(pytz.utc)
+        base_params = {}
+        if data_type == "electrocardiogram":
+            start_iso = start_utc.isoformat().replace("+00:00", "Z")
+            # Google documents only the inclusive lower bound for ECG sessions.
+            base_params["filter"] = (
+                f'electrocardiogram.interval.start_time >= "{start_iso}"'
+            )
+
+        points = []
+        page_token = None
+        for page in range(50):
+            params = dict(base_params)
+            params["pageSize"] = page_size
+            if page_token:
+                params["pageToken"] = page_token
+            try:
+                response = self.request_google_data_points_list(
+                    data_type, params=params, suppress_http_error_log=page == 0
+                )
+            except requests.exceptions.HTTPError as error:
+                if (
+                    page == 0
+                    and base_params
+                    and error.response is not None
+                    and error.response.status_code == 400
+                ):
+                    base_params = {}
+                    continue
+                if page:
+                    logger.warning(
+                        "Pagination interrupted for %s; keeping %d points",
+                        data_type,
+                        len(points),
+                    )
+                    break
+                raise
+            if not isinstance(response, dict):
+                break
+            points.extend(response.get("dataPoints", []))
+            page_token = response.get("nextPageToken")
+            if not page_token:
+                break
+
+        filtered = []
+        for data_point in points:
+            timestamp = parse_google_datapoint_timestamp(
+                data_point, data_type, self.timezone
+            )
+            if not timestamp:
+                continue
+            observed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            if start_utc <= observed < end_utc:
+                filtered.append((data_point, timestamp))
+        return filtered
+
     def discover_google_device_metadata(self):
         """Return actual device metadata attached to a recent Google data point."""
         for data_type in (

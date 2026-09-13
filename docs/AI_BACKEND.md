@@ -34,6 +34,13 @@ if not dotenv_values(path).get('AI_API_TOKEN'):
 
 Use the collector's `USER_ID` (default `user_001`), `HEALTH_API_PROVIDER`, and `DEVICE_ID` (default `fitbit_air_001`). Every query filters all three; changing these settings selects different series. Untagged legacy data is excluded. There is no client-supplied user identity or multiuser login.
 
+Google Calendar correlation is optional and off unless the collector syncs a calendar. The API
+reads `CALENDAR_CLIENT_ID` / `CALENDAR_CLIENT_SECRET` (falling back to `GOOGLE_*`),
+`CALENDAR_TOKEN_FILE_PATH`, `CALENDAR_REDIRECT_URI`, `CALENDAR_IDS` and
+`CALENDAR_AI_INCLUDE_TITLES`; `API_UID` must match the collector's uid so both containers can
+read the token file. [docs/CALENDAR_SYNC.md](CALENDAR_SYNC.md) documents all of them, and the
+API never needs `CALENDAR_SYNC_ENABLED`, which belongs to the collector.
+
 `LOCAL_TIMEZONE` selects the calendar timezone. `Automatic` uses `TZ`, defaulting to `America/Los_Angeles`. The API targets the existing InfluxDB 1.x database via the existing `INFLUXDB_*` connection settings. It does not support the collector's 2.x/3.x targets.
 
 ```powershell
@@ -43,7 +50,7 @@ docker compose up -d --no-deps ai-api
 docker compose ps ai-api
 ```
 
-For a new stack, use `docker compose up -d ai-api` to start the database dependency too. The API runs as a non-root user with a read-only filesystem, no host data mounts, one worker, and port `127.0.0.1:8000`. It has `unless-stopped` restart behavior. Keep it localhost-bound unless you add an appropriate authenticated HTTPS deployment layer.
+For a new stack, use `docker compose up -d ai-api` to start the database dependency too. The API runs as a non-root user with a read-only filesystem, one worker, and port `127.0.0.1:8000`. Its only host mount is the `./tokens` bind mount it shares with the collector, which the calendar connect flow needs (see [docs/CALENDAR_SYNC.md](CALENDAR_SYNC.md)); no health data is mounted from the host. It has `unless-stopped` restart behavior. Keep it localhost-bound unless you add an appropriate authenticated HTTPS deployment layer.
 
 Local development:
 
@@ -69,9 +76,10 @@ All AI routes require `Authorization: Bearer <AI_API_TOKEN>`. The bearer token i
 | `POST /api/ai/activity` | `{"period":"7d"}` | Steps, activity minutes, calories, distance, zones |
 | `POST /api/ai/workouts` | `{"period":"7d"}` | Recorded workouts and supporting recovery data |
 | `POST /api/ai/recovery` | `{"period":"7d"}` | Personal recovery baselines |
+| `POST /api/ai/calendar` | `{"period":"30d"}` | Meeting load against heart rate, sleep and HRV (see docs/CALENDAR_SYNC.md) |
 | `POST /api/ai/ask` | `{"period":"14d","question":"Am I walking more than last week?"}` | Locally classified natural-language questions |
 
-All analysis routes require a JSON object; `{}` uses the configured default period. `/ask` requires a nonblank question of at most 2,000 characters. Periods use `Nd`, from `1d` through `90d`; the configured maximum may be smaller. Focus categories are `sleep`, `activity`, `workouts`, `recovery`, `cardiovascular`, and `body`. Specialized routes select their own focus; `/ask` classifies the question rather than using a supplied focus. The explicit/default period controls date selection; natural-language dates do not override it. Unknown request fields, including user identifiers, are rejected.
+All analysis routes require a JSON object; `{}` uses the configured default period. `/ask` requires a nonblank question of at most 2,000 characters. Periods use `Nd`, from `1d` through `90d`; the configured maximum may be smaller. Focus categories are `sleep`, `activity`, `workouts`, `recovery`, `cardiovascular`, `body`, and `calendar`. Specialized routes select their own focus; `/ask` classifies the question rather than using a supplied focus. The explicit/default period controls date selection; natural-language dates do not override it. Unknown request fields, including user identifiers, are rejected.
 
 Example without printing either key:
 
@@ -114,6 +122,7 @@ Controlled service errors use `{"error":"CODE","message":"Explanation"}`. Failed
 - Sleep sessions are deduplicated and assigned to their local wake date. Stage durations supplement missing summary fields by session ID. Bed/wake consistency uses the longest main sleep per day and circular time differences around midnight. Missing or ambiguous timestamps are not fabricated.
 - Workouts are deduplicated by activity ID. Durations remain seconds, distances kilometers, and weight kilograms. Heart-rate trends provide relative intensity context; no universal intensity thresholds are imposed. Missing workout days are described as days without records, not confirmed rest days. The collector fetches only the most recent 50 exercises, so historical workout coverage can be incomplete.
 - Older classic Fitbit sleep labels may map restless sleep to REM in stored data. The API reports this limitation and does not rewrite those records. Sleep/other unavailable provider measurements remain gaps.
+- Calendar analysis (`POST /api/ai/calendar`, or `calendar` in a `/analyze` focus) sends only the aggregates of the deterministic insights: meeting load averaged over the days that had events, correlations backed by at least 10 paired days, the top 5 recurring series, time-of-day elevation and the caveats. Event IDs, per-event rows and attendee identities are never sent; series titles are truncated to 80 characters, treated as untrusted text, and replaced by `series-N` when `CALENDAR_AI_INCLUDE_TITLES=false`. A period without a readable event answers `INSUFFICIENT_DATA`. An unreadable calendar drops the section instead of failing the analysis, so a calendar problem never breaks a health request. Calendar heart-rate figures are a movement-confounded proxy for stress, not a diagnosis.
 - Optional GPS and device metadata are not queried. The model receives no account/device/session IDs or raw high-frequency records. Questions and activity labels are treated as untrusted text. Avoid including identifying details in questions: the question itself is sent to Gemini.
 - Queries use at most 190 days and 20,000 returned rows per measurement, failing rather than silently truncating. Intraday series are aggregated hourly in InfluxDB first. Each database request has a 10-second timeout. Gemini calls use bounded transient retries (timeouts, 429, and 5xx) with exponential backoff + jitter, optional `Retry-After` support, and a max elapsed budget; invalid model output is still retried once with stricter instructions. An optional fallback Gemini model can be configured for transient primary-model failures. Daily details sent to Gemini are capped at the latest 14 observed days per metric while period statistics retain the full requested range. Prepared model payloads are limited to 120 KB and outputs to 50,000 characters.
 - A single in-flight analysis/check per process bounds provider load. Successful analyses are cached in memory for five minutes, up to 128 entries. Cache identity includes user, provider/device, model, question/focus/period and prepared context. The database is queried before checking the model-response cache so new data invalidates it. Restarting clears cached health summaries.

@@ -2,7 +2,9 @@ FROM python:3.14-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 COPY requirements-api.txt requirements-common.txt ./
-RUN pip install --no-cache-dir -r requirements-api.txt && useradd --create-home --uid 10001 apiuser
+# API_UID must match the collector's appuser so both read the 0600 calendar token file.
+ARG API_UID=10001
+RUN pip install --no-cache-dir -r requirements-api.txt && useradd --create-home --uid ${API_UID} apiuser
 COPY --chown=apiuser:apiuser app ./app
 COPY --chown=apiuser:apiuser health_schema.py ./health_schema.py
 USER apiuser

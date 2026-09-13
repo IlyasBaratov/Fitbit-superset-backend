@@ -1,0 +1,328 @@
+{
+  "calendar_id": "primary",
+  "timezone": "America/Los_Angeles",
+  "items": [
+    {
+      "id": "evt-standup",
+      "status": "confirmed",
+      "summary": "Team\nstandup",
+      "start": {
+        "dateTime": "2026-09-01T09:00:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      },
+      "end": {
+        "dateTime": "2026-09-01T09:30:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      },
+      "attendees": [
+        {
+          "email": "one@example.com",
+          "responseStatus": "accepted"
+        },
+        {
+          "email": "two@example.com",
+          "responseStatus": "tentative"
+        },
+        {
+          "email": "three@example.com",
+          "responseStatus": "needsAction"
+        },
+        {
+          "email": "me@example.com",
+          "self": true,
+          "responseStatus": "accepted"
+        }
+      ],
+      "organizer": {
+        "email": "me@example.com",
+        "self": true
+      },
+      "updated": "2026-08-30T12:00:00.000Z"
+    },
+    {
+      "id": "evt-offsite",
+      "status": "confirmed",
+      "summary": "Company offsite",
+      "eventType": "outOfOffice",
+      "start": {
+        "date": "2026-09-03"
+      },
+      "end": {
+        "date": "2026-09-05"
+      },
+      "organizer": {
+        "email": "boss@example.com"
+      },
+      "updated": "2026-08-25T08:15:00Z"
+    },
+    {
+      "id": "evt-series_20260902T160000Z",
+      "status": "cancelled",
+      "recurringEventId": "evt-series",
+      "originalStartTime": {
+        "dateTime": "2026-09-02T09:00:00-07:00"
+      },
+      "updated": "2026-09-01T10:00:00Z"
+    },
+    {
+      "id": "evt-series_20260903T160000Z",
+      "status": "confirmed",
+      "summary": "Weekly sync",
+      "recurringEventId": "evt-series",
+      "start": {
+        "dateTime": "2026-09-03T09:00:00-07:00"
+      },
+      "end": {
+        "dateTime": "2026-09-03T10:00:00-07:00"
+      },
+      "attendees": [
+        {
+          "email": "me@example.com",
+          "self": true,
+          "responseStatus": "tentative"
+        },
+        {
+          "email": "one@example.com",
+          "responseStatus": "accepted"
+        }
+      ],
+      "organizer": {
+        "email": "one@example.com"
+      },
+      "updated": "2026-09-01T11:30:00Z"
+    },
+    {
+      "id": "evt-focus",
+      "status": "confirmed",
+      "summary": "Deep work",
+      "eventType": "focusTime",
+      "start": {
+        "dateTime": "2026-09-04T13:00:00-07:00"
+      },
+      "end": {
+        "dateTime": "2026-09-04T15:00:00-07:00"
+      },
+      "organizer": {
+        "email": "me@example.com",
+        "self": true
+      },
+      "updated": "2026-09-02T09:00:00Z"
+    },
+    {
+      "id": "evt-reading-group",
+      "status": "tentative",
+      "summary": "Reading group (optional)",
+      "transparency": "transparent",
+      "start": {
+        "dateTime": "2026-09-04T17:00:00-07:00"
+      },
+      "end": {
+        "dateTime": "2026-09-04T18:00:00-07:00"
+      },
+      "updated": "2026-09-02T10:00:00Z"
+    },
+    {
+      "id": "evt-no-summary",
+      "status": "confirmed",
+      "start": {
+        "dateTime": "2026-09-05T08:00:00-07:00"
+      },
+      "end": {
+        "dateTime": "2026-09-05T08:15:00-07:00"
+      },
+      "updated": "2026-09-04T07:00:00Z"
+    },
+    {
+      "status": "confirmed",
+      "summary": "Missing identifier",
+      "start": {
+        "dateTime": "2026-09-05T09:00:00-07:00"
+      },
+      "end": {
+        "dateTime": "2026-09-05T09:30:00-07:00"
+      }
+    },
+    {
+      "id": "evt-no-start",
+      "status": "cancelled",
+      "updated": "2026-09-05T10:00:00Z"
+    }
+  ],
+  "expected": [
+    {
+      "measurement": "Calendar Events",
+      "time": "2026-09-01T16:00:00+00:00",
+      "tags": {
+        "CalendarId": "primary",
+        "EventId": "evt-standup",
+        "UserId": "u",
+        "Provider": "google_calendar",
+        "Device": "Google Calendar",
+        "DeviceId": "google_calendar"
+      },
+      "fields": {
+        "summary": "Team standup",
+        "startTime": "2026-09-01T16:00:00+00:00",
+        "endTime": "2026-09-01T16:30:00+00:00",
+        "duration_seconds": 1800,
+        "status": "confirmed",
+        "eventType": "default",
+        "transparency": "opaque",
+        "attendees": 3,
+        "isOrganizer": true,
+        "responseStatus": "accepted",
+        "updated": "2026-08-30T12:00:00.000Z",
+        "isAllDay": false
+      }
+    },
+    {
+      "measurement": "Calendar Events",
+      "time": "2026-09-03T07:00:00+00:00",
+      "tags": {
+        "CalendarId": "primary",
+        "EventId": "evt-offsite",
+        "UserId": "u",
+        "Provider": "google_calendar",
+        "Device": "Google Calendar",
+        "DeviceId": "google_calendar"
+      },
+      "fields": {
+        "summary": "Company offsite",
+        "startTime": "2026-09-03T07:00:00+00:00",
+        "endTime": "2026-09-05T07:00:00+00:00",
+        "duration_seconds": 172800,
+        "status": "confirmed",
+        "eventType": "outOfOffice",
+        "transparency": "opaque",
+        "attendees": 0,
+        "isOrganizer": false,
+        "updated": "2026-08-25T08:15:00Z",
+        "isAllDay": true
+      }
+    },
+    {
+      "measurement": "Calendar Events",
+      "time": "2026-09-02T16:00:00+00:00",
+      "tags": {
+        "CalendarId": "primary",
+        "EventId": "evt-series_20260902T160000Z",
+        "UserId": "u",
+        "Provider": "google_calendar",
+        "Device": "Google Calendar",
+        "DeviceId": "google_calendar"
+      },
+      "fields": {
+        "startTime": "2026-09-02T16:00:00+00:00",
+        "status": "cancelled",
+        "eventType": "default",
+        "transparency": "opaque",
+        "attendees": 0,
+        "isOrganizer": false,
+        "recurringEventId": "evt-series",
+        "updated": "2026-09-01T10:00:00Z",
+        "isAllDay": false
+      }
+    },
+    {
+      "measurement": "Calendar Events",
+      "time": "2026-09-03T16:00:00+00:00",
+      "tags": {
+        "CalendarId": "primary",
+        "EventId": "evt-series_20260903T160000Z",
+        "UserId": "u",
+        "Provider": "google_calendar",
+        "Device": "Google Calendar",
+        "DeviceId": "google_calendar"
+      },
+      "fields": {
+        "summary": "Weekly sync",
+        "startTime": "2026-09-03T16:00:00+00:00",
+        "endTime": "2026-09-03T17:00:00+00:00",
+        "duration_seconds": 3600,
+        "status": "confirmed",
+        "eventType": "default",
+        "transparency": "opaque",
+        "attendees": 1,
+        "isOrganizer": false,
+        "responseStatus": "tentative",
+        "recurringEventId": "evt-series",
+        "updated": "2026-09-01T11:30:00Z",
+        "isAllDay": false
+      }
+    },
+    {
+      "measurement": "Calendar Events",
+      "time": "2026-09-04T20:00:00+00:00",
+      "tags": {
+        "CalendarId": "primary",
+        "EventId": "evt-focus",
+        "UserId": "u",
+        "Provider": "google_calendar",
+        "Device": "Google Calendar",
+        "DeviceId": "google_calendar"
+      },
+      "fields": {
+        "summary": "Deep work",
+        "startTime": "2026-09-04T20:00:00+00:00",
+        "endTime": "2026-09-04T22:00:00+00:00",
+        "duration_seconds": 7200,
+        "status": "confirmed",
+        "eventType": "focusTime",
+        "transparency": "opaque",
+        "attendees": 0,
+        "isOrganizer": true,
+        "updated": "2026-09-02T09:00:00Z",
+        "isAllDay": false
+      }
+    },
+    {
+      "measurement": "Calendar Events",
+      "time": "2026-09-05T00:00:00+00:00",
+      "tags": {
+        "CalendarId": "primary",
+        "EventId": "evt-reading-group",
+        "UserId": "u",
+        "Provider": "google_calendar",
+        "Device": "Google Calendar",
+        "DeviceId": "google_calendar"
+      },
+      "fields": {
+        "summary": "Reading group (optional)",
+        "startTime": "2026-09-05T00:00:00+00:00",
+        "endTime": "2026-09-05T01:00:00+00:00",
+        "duration_seconds": 3600,
+        "status": "tentative",
+        "eventType": "default",
+        "transparency": "transparent",
+        "attendees": 0,
+        "isOrganizer": false,
+        "updated": "2026-09-02T10:00:00Z",
+        "isAllDay": false
+      }
+    },
+    {
+      "measurement": "Calendar Events",
+      "time": "2026-09-05T15:00:00+00:00",
+      "tags": {
+        "CalendarId": "primary",
+        "EventId": "evt-no-summary",
+        "UserId": "u",
+        "Provider": "google_calendar",
+        "Device": "Google Calendar",
+        "DeviceId": "google_calendar"
+      },
+      "fields": {
+        "startTime": "2026-09-05T15:00:00+00:00",
+        "endTime": "2026-09-05T15:15:00+00:00",
+        "duration_seconds": 900,
+        "status": "confirmed",
+        "eventType": "default",
+        "transparency": "opaque",
+        "attendees": 0,
+        "isOrganizer": false,
+        "updated": "2026-09-04T07:00:00Z",
+        "isAllDay": false
+      }
+    }
+  ]
+}

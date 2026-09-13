@@ -1,0 +1,355 @@
+# Google Calendar sync
+
+Read-only Google Calendar ingestion, so calendar events can be correlated with the
+Fitbit/Google Health data already in InfluxDB. Calendar access is never written back to
+Google. Full design and progress: `docs/CALENDAR_SYNC_BACKLOG.md`.
+
+## Setup
+
+1. **Google Cloud.** Enable the *Google Calendar API* in the project owning the OAuth client
+   you intend to use. If the consent screen is still in *Testing*, refresh tokens expire after
+   seven days; switching to *In production* removes that, but Google first wants the consent
+   screen's branding completed — app name, support email, developer contact and public
+   homepage, privacy-policy and terms links (C0.1 in `docs/CALENDAR_SYNC_BACKLOG.md` records
+   where this stands). Add the redirect URI `http://localhost:8765/` to the client for the CLI
+   flow below, and `http://localhost:8000/api/calendar/callback` for the API flow.
+2. **Credentials.** Put them in `.env` as `CALENDAR_CLIENT_ID` and `CALENDAR_CLIENT_SECRET`;
+   both fall back to `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` when left empty.
+   `CALENDAR_IDS` is a comma-separated list of calendar ids (default `primary`), each taken
+   from Google Calendar → Settings → *Integrate calendar* → *Calendar ID*.
+3. **Authorize.** Run the loopback flow on the host — it needs a browser, so it does not run
+   inside the container:
+
+   ```bash
+   python -m scripts.google_calendar_authorize            # --port 8765 by default
+   ```
+
+   Run it from the repository root so that `app` is importable.
+
+   The script prints an authorization URL and opens it in a browser. Grant the read-only
+   `calendar.events.readonly` scope; Google redirects back to `http://localhost:8765/`, the
+   one-shot local server checks the `state` nonce, exchanges the code and writes the token.
+   Nothing is read from stdin and no token value is ever printed. A rejected or mismatched
+   `state` writes no file.
+4. **Check the token.** It lands at `CALENDAR_TOKEN_FILE_PATH` (default
+   `./tokens/google_calendar.token`, mode `0600`), separate from the health token, with
+   `"provider": "google_calendar"`. Compose bind-mounts `./tokens` into the worker at
+   `/app/tokens`, so the file is picked up without rebuilding; the worker re-reads it when its
+   mtime changes, so reconnecting needs no restart. A missing file simply means *not
+   connected*: calendar sync is skipped and health collection is unaffected.
+5. **Enable sync.** Set `CALENDAR_SYNC_ENABLED=true` and restart the collector.
+
+Re-running the script re-authorizes and overwrites the token file. To disconnect, call
+`DELETE /api/calendar/connection` or delete the token file; the worker notices on its next
+cycle.
+
+## Connecting through the API
+
+The API can run the same flow without a shell on the host, which is the usual route when the
+stack runs under Compose (D13). Register `http://localhost:8000/api/calendar/callback` as a
+redirect URI on the OAuth client, set `CALENDAR_CLIENT_ID` / `CALENDAR_CLIENT_SECRET` (both
+fall back to `GOOGLE_*`) and, if the API is not reached at `localhost:8000`,
+`CALENDAR_REDIRECT_URI`.
+
+```bash
+curl -H "Authorization: Bearer $AI_API_TOKEN" http://127.0.0.1:8000/api/calendar/connect
+# {"authorization_url":"https://accounts.google.com/o/oauth2/v2/auth?...","expires_in":600}
+```
+
+Open the returned URL in a browser and grant the read-only scope. Google redirects back to
+`/api/calendar/callback`, which answers with the plain text *Google Calendar connected. You can
+close this tab.* and writes `CALENDAR_TOKEN_FILE_PATH` (mode `0600`). The collector picks the
+new file up on its next cycle; no restart is needed.
+
+| Endpoint | Auth | Purpose |
+| --- | --- | --- |
+| `GET /api/calendar/connect` | bearer | Returns an authorization URL bound to a single-use `state` nonce (10 minutes, at most 10 pending, oldest evicted) |
+| `GET /api/calendar/callback?state=&code=` | none — Google redirects the browser here | Validates the nonce, exchanges the code, writes the token file |
+| `GET /api/calendar/status` | bearer | Reports the connection without exposing it |
+| `DELETE /api/calendar/connection` | bearer | Revokes the refresh token at Google and removes the token file, `204` |
+
+Errors: `503 CALENDAR_NOT_CONFIGURED` when the client credentials are missing;
+`400 CALENDAR_CONNECT_REJECTED` for an unknown, expired, replayed or denied authorization;
+`404 CALENDAR_NOT_CONNECTED` when there is no stored connection to remove.
+Neither the authorization code nor any token or client secret appears in a response or a log
+line.
+
+```bash
+curl -H "Authorization: Bearer $AI_API_TOKEN" http://127.0.0.1:8000/api/calendar/status
+# {"connected":true,"configured":true,"calendar_ids":["primary"],
+#  "token_saved_at":"2026-03-09T12:00:00Z","last_event_start":"2026-03-09T10:00:00Z",
+#  "redirect_uri":"http://localhost:8000/api/calendar/callback"}
+
+curl -X DELETE -H "Authorization: Bearer $AI_API_TOKEN" \
+  http://127.0.0.1:8000/api/calendar/connection      # 204, no body
+```
+
+`connected` means the token file holds a refresh token, `configured` that the server has client
+credentials and a token path — status answers even when it has neither, so it can say so.
+`last_event_start` is the start of the newest stored `Calendar Events` point, or `null` when
+nothing has been synced yet or InfluxDB cannot be read; the connection state never depends on
+the store. Disconnecting revokes best effort — a revocation Google refuses still removes the
+file — and the collector logs *not connected* on its next cycle instead of stopping (D2).
+
+Both containers must be able to read the `0600` token file, so the API runs as the collector's
+uid:
+
+```bash
+docker compose exec fitbit-fetch-data id -u     # e.g. 1000
+echo 'API_UID=1000' >> .env                     # default 10001
+docker compose up -d --build ai-api
+```
+
+`ai-api` stays `read_only: true`; the bind-mounted `./tokens` is its only writable path.
+
+## Running it with Docker
+
+```bash
+python -m scripts.google_calendar_authorize      # on the host, writes ./tokens/google_calendar.token
+echo 'CALENDAR_SYNC_ENABLED=true' >> .env        # plus CALENDAR_IDS / CALENDAR_CLIENT_* if needed
+docker compose up -d fitbit-fetch-data
+docker compose logs -f fitbit-fetch-data
+```
+
+`./tokens` is bind-mounted into the collector, so the token file needs no rebuild and no
+restart: the worker re-reads it whenever its mtime changes.
+
+Expected log lines:
+
+| Line | Meaning |
+| --- | --- |
+| `Google Calendar connected` | A token was found and the first sync succeeded |
+| `Google Calendar is not connected; skipping calendar sync until it is` | No token file, or it was revoked or deleted — logged once per state change, not every cycle |
+| `Successfully wrote N points to InfluxDB` | The sync reached InfluxDB (shared with health writes) |
+| `calendar <id> unavailable: permission or device capability (HTTP 403)` | That one calendar was skipped; the others still sync |
+
+Check the stored data:
+
+```bash
+docker compose exec influxdb influx -database FitbitHealthStats \
+  -execute 'SELECT * FROM "Calendar Events" ORDER BY time DESC LIMIT 5'
+```
+
+## Sync policy
+
+Once `CALENDAR_SYNC_ENABLED=true`, the collector syncs the calendar once at startup and then
+every 15 minutes, re-reading the whole
+`[today − CALENDAR_SYNC_DAYS_BACK, today + CALENDAR_SYNC_DAYS_AHEAD]` window of local days so
+that moved and cancelled events are corrected. Health collection runs independently and never
+waits for it (D1): a calendar that cannot be read leaves the health jobs untouched.
+
+Each calendar is listed with `singleEvents=true&showDeleted=true&orderBy=startTime`, so a
+recurring meeting arrives as its individual occurrences, and paginated at 250 events per page,
+at most 50 pages per calendar per cycle. No `syncToken` is used — Google rejects it together
+with `timeMin`/`timeMax`, and the rolling window makes incremental sync unnecessary.
+
+Cancelled occurrences are stored with `status=cancelled` rather than deleted, so a meeting that
+disappeared stays visible in history. A re-sync overwrites the same point (same `EventId` tag at
+the same event start), so repeated cycles do not duplicate rows. A *moved* event is the one
+exception: its old point stays behind at the old start, and the read side dedupes by `EventId`
+keeping the row with the newest `updated`.
+
+## Schema
+
+Events land in the single measurement `Calendar Events`, keyed by the person rather than by the
+wearable (D4): the common tags are `UserId=<USER_ID>`, `Provider=google_calendar`,
+`Device=Google Calendar`, `DeviceId=google_calendar`, plus `CalendarId` and `EventId`. Reads
+filter on `UserId` and `Provider` only, so calendar history survives a change of
+`HEALTH_API_PROVIDER` or `DEVICE_ID`.
+
+The point time is the event start in UTC; an all-day event is stored at the local midnight of
+its `start.date`. Fields are `summary`, `startTime`, `endTime`, `status`, `eventType`,
+`transparency`, `responseStatus`, `recurringEventId` and `updated` (strings),
+`duration_seconds` and `attendees` (integers), and `isOrganizer` and `isAllDay` (booleans).
+Attendee identities and event descriptions are never stored, and `summary` keeps at most 200
+printable characters. Field types and the timestamp rules are canonical in
+[docs/influxdb_schema.md](influxdb_schema.md); no existing measurement changes.
+
+## Grafana annotations
+
+`Calendar Events` points are written at the event start, so Grafana can draw them straight onto
+the existing heart-rate panel as annotations — one marker per event, labelled with its summary.
+
+Dashboard → *Settings* → *Annotations* → *New annotation query*:
+
+1. **Data source** — the InfluxDB 1.x datasource that serves the dashboards
+   (database `FitbitHealthStats`, the same one the heart-rate panels read).
+2. **Query** — paste:
+
+   ```sql
+   SELECT "summary" AS text, "EventId" AS tags FROM "Calendar Events"
+   WHERE $timeFilter AND "status" = 'confirmed' AND "isAllDay" = false
+   ```
+
+   `$timeFilter` is substituted with the dashboard range, so the query never scans more than the
+   panel shows. `status` and `isAllDay` are fields, `EventId` a tag; the aliases are what makes
+   Grafana pick the columns up.
+3. **Field mappings** — the InfluxQL annotation editor asks which columns to use. With the
+   aliases above the defaults already fit: *Time* → `time`, *Text* → `text`, *Tags* → `tags`.
+   Older or stricter datasource versions expose *Field for Text* / *Field for Tags* instead —
+   set them to `summary` and `EventId` and drop the two `AS` aliases from the query.
+4. **Filter by** — annotations are dashboard-wide by default; pick *Selected panels* and choose
+   the heart-rate panel to keep the rest of the dashboard clean.
+
+Adjust the `WHERE` clause to taste: drop `"status" = 'confirmed'` to see tentative events,
+add `AND "transparency" = 'opaque'` to hide events marked *free*, or
+`AND "duration_seconds" >= 600` to match the ten-minute floor `/api/calendar/events` applies.
+Times are stored in UTC and rendered in the dashboard timezone.
+
+No dashboard JSON is exported here: the query is **unverified against a live Grafana** — it was
+written from the schema in `docs/influxdb_schema.md`, not run on the stack. Running it, and
+exporting a dashboard from it, needs the live stack (the manual pass, C5.3 in
+`docs/CALENDAR_SYNC_BACKLOG.md`).
+
+## Endpoints
+
+| Endpoint | Auth | Purpose |
+| --- | --- | --- |
+| `GET /api/health/calendar?period=7d` | bearer | Stored `Calendar Events` rows, unprocessed (see docs/HEALTH_API.md) |
+| `GET /api/calendar/events?period=7d` | bearer | Readable events with the heart-rate response measured around each one |
+| `GET /api/calendar/insights?period=30d` | bearer | Meeting load per day, correlations with the daily metrics, recurring series |
+| `POST /api/ai/calendar` | bearer | Gemini's reading of those insights (see docs/AI_BACKEND.md) |
+
+The connection endpoints — `connect`, `callback`, `status` and `connection` — are listed under
+[Connecting through the API](#connecting-through-the-api).
+
+`/api/calendar/events` follows the health period rules: `?period=7d`, default
+`AI_DEFAULT_ANALYSIS_DAYS`, maximum `AI_MAX_ANALYSIS_DAYS`, whole local days up to now, and no
+other query parameter. It reuses the health error codes — `422 INVALID_HEALTH_PERIOD`,
+`422 HEALTH_QUERY_TOO_LARGE`, `503 DATA_SERVICE_UNAVAILABLE`.
+
+The response carries `start`, `end`, `timezone`, `bucket_minutes` (the intraday resolution the
+period was read at, 7 d → 1 min, 30 d → 3 min, 90 d → 7 min, so no read exceeds the 20 000-row
+cap) and `events[]`. Each event has `event_id`, `calendar_id`, `summary`, `start`, `end`,
+`duration_minutes`, `attendees`, `is_organizer`, `response_status`, `event_type`,
+`recurring_event_id`, `notes[]` and `vitals`:
+
+```jsonc
+{
+  "mean_hr": 92.5, "max_hr": 108, "sample_count": 30, "coverage_pct": 100,
+  "hr_vs_resting_pct": 54.1667,        // against the resting HR of the event's local day
+  "steps": 120, "steps_per_minute": 4, "movement_confounded": false,
+  "pre30_mean_hr": 78.2, "post30_mean_hr": 80.1, "recovery_delta": -12.4
+}
+```
+
+Only events whose heart-rate response can mean something are listed: cancelled, all-day, *free*
+(`transparent`) and shorter-than-10-minute events are left out, and a moved event appears once,
+with its newest stored row. `vitals` is `null` when heart-rate buckets cover less than half of
+the event; `notes[]` then says so, and also flags movement during the event or a missing resting
+baseline (the baseline falls back to the nearest resting heart rate within seven days). Elevated
+heart rate is a stress *proxy*, never a diagnosis: movement, caffeine and illness confound it.
+
+### `GET /api/calendar/insights`
+
+Everything `/api/calendar/events` measures, aggregated over the period — deterministic, no Gemini.
+Same period rules, same error codes. The response:
+
+| Field | Content |
+| --- | --- |
+| `period` | `start`, `end`, `timezone`, `days`, `bucket_minutes` of the read |
+| `days_with_events` | local days in the period holding at least one readable event |
+| `daily_load[]` | the last 14 of those days: `date`, `event_count`, `meeting_count`, `meeting_minutes`, `event_minutes`, `back_to_back_count` (gap ≤ 5 min), `first_event_hour`, `last_event_hour` |
+| `correlations{}` | per metric, `same_day` and `next_day` `{r, n, insufficient_data}`: Pearson *r* of the day's meeting minutes against `resting_hr`, `hrv_rmssd`, `sleep_hours`, `sleep_efficiency`, `steps`, `active_minutes`, `breathing_rate`, `skin_temperature_deviation`. Fewer than 10 paired days reports `insufficient_data` |
+| `tercile_comparison{}` | the same metrics on the busiest third of days against the quietest third (each ≥ 4 days): `top_third_mean`, `bottom_third_mean`, their meeting minutes, `difference`, `percent` |
+| `series[]` | up to 10 recurring meetings — grouped by recurrence id, else by title — with `occurrences`, `with_vitals`, `mean_hr_vs_resting_pct`, `mean_recovery_delta`, `confounded_count`. Series read at least 3 times rank first, steepest elevation on top |
+| `time_of_day{}` | `morning` (< 12), `afternoon` (12–17), `evening` (≥ 17) by local start hour: mean elevation and the `n` behind it |
+| `top_events[]` | the 5 steepest single events no movement spoiled |
+| `caveats[]` | the fixed warnings, plus how many events lacked heart-rate coverage |
+
+Sleep, HRV and resting heart rate are read the *morning after* the load they follow, so `next_day`
+is the meaningful column for them and `same_day` for the rest. The daily metric series are the ones
+`/api/ai/*` already computes; they are never re-derived here. A period without a readable event
+answers `200` with empty sections and reads no metrics at all.
+
+### `POST /api/ai/calendar`
+
+The same insights, read by Gemini. `{"period":"30d"}`, or `{}` for `AI_DEFAULT_ANALYSIS_DAYS`;
+the body, response shape, error codes, caching and the one-analysis-at-a-time limit are the
+shared AI ones (docs/AI_BACKEND.md). `calendar` is also a focus category of `POST /api/ai/analyze`,
+and `POST /api/ai/ask` classifies a question mentioning meetings, appointments or a schedule into
+it.
+
+Gemini receives aggregates only — load means, correlations with at least 10 paired days, the top 5
+series, time-of-day elevation, the caveats. Event IDs, per-event rows and attendees never leave the
+API; series titles are cut to 80 characters and become `series-1 …` when
+`CALENDAR_AI_INCLUDE_TITLES=false` (D9). A period without a readable event answers
+`422 INSUFFICIENT_DATA`, and a calendar the API cannot read is dropped from the context rather than
+failing an analysis that also covers health data (D1).
+
+## Limits
+
+- **One person per stack.** Rows are keyed by `USER_ID` with a single token file; several
+  people need per-user tokens and identity, which is out of scope (D4).
+- **Read-only.** Nothing is ever written back to Google, and there are no push notifications
+  and no frontend.
+- **Per sync cycle:** at most 250 events per page and 50 pages per calendar, over the
+  `[−CALENDAR_SYNC_DAYS_BACK, +CALENDAR_SYNC_DAYS_AHEAD]` window. A calendar that exceeds that
+  logs a warning and keeps what it read.
+- **Per read:** `?period=Nd` up to `AI_MAX_ANALYSIS_DAYS` (at most `90d`); a measurement
+  answering more than 20,000 rows fails with `422 HEALTH_QUERY_TOO_LARGE`. Intraday heart rate
+  and steps are therefore read in buckets of `max(1, ceil(days × 1440 / 20000))` minutes
+  (7 d → 1, 30 d → 3, 90 d → 7).
+- **Which events get vitals:** cancelled, all-day, *free* (`transparent`) and shorter-than-10-minute
+  events are skipped, and `vitals` stays `null` unless heart-rate buckets cover at least half the
+  event. The resting baseline falls back to the nearest resting heart rate within 7 days.
+- **How much evidence an insight needs:** a correlation needs 10 paired days, a tercile
+  comparison 4 days on each side, a ranked series 3 occurrences; `daily_load[]` covers the last
+  14 days with events, `series[]` the top 10 and `top_events[]` the top 5.
+- **Stress is a proxy, not a measurement.** Fitbit exposes no stress score, and the Google
+  Health catalogue checked in C0.2 exposes no stress data type either, so elevated heart rate
+  stands in for it — movement, caffeine and illness all confound it (D7).
+- **Connect flow:** the `state` nonce lives in memory for 10 minutes, at most 10 pending at a
+  time, and the API runs one uvicorn worker; restarting it invalidates pending authorizations.
+- **Consent screen in *Testing*:** Google expires the refresh token after seven days, so sync
+  stops until you re-authorize.
+
+## Troubleshooting
+
+- **`Google Calendar is not connected`** — the token file is missing at
+  `CALENDAR_TOKEN_FILE_PATH` or no longer valid. Re-run the authorize script on the host and
+  confirm the file exists in `./tokens/`; the worker picks it up within one cycle.
+- **No calendar job at all** — `CALENDAR_SYNC_ENABLED` is not truthy, so the collector builds
+  no calendar provider, or `AUTO_DATE_RANGE=false`, which runs a one-off bulk sync instead of
+  the periodic schedule the calendar job is registered on.
+- **HTTP 403 for a calendar** — the *Google Calendar API* is not enabled in the client's
+  project, or the token was granted without the `calendar.events.readonly` scope. Only that
+  calendar is skipped; fix the scope and re-authorize.
+- **The token stops working every seven days** — the OAuth consent screen is still in
+  *Testing*. Re-authorize, or publish the consent screen (see step 1 of Setup).
+- **HTTP 404 for a calendar id** — the id in `CALENDAR_IDS` is wrong or not shared with the
+  authorized account.
+- **`redirect_uri_mismatch` from Google, or `400 CALENDAR_CONNECT_REJECTED`** — the OAuth
+  client has no redirect URI matching `CALENDAR_REDIRECT_URI`, or the browser was sent an
+  authorization URL older than ten minutes. Call `GET /api/calendar/connect` again.
+- **The API cannot read or write the token file** — its uid does not match the collector's.
+  Compare `docker compose exec fitbit-fetch-data id -u` with `API_UID` and rebuild `ai-api`.
+
+## Environment
+
+| Variable | Default | Read by | Meaning |
+| --- | --- | --- | --- |
+| `CALENDAR_SYNC_ENABLED` | `false` | collector | Run the calendar job beside health collection |
+| `CALENDAR_IDS` | `primary` | both | Comma-separated calendar ids to sync |
+| `CALENDAR_CLIENT_ID` / `CALENDAR_CLIENT_SECRET` | `GOOGLE_*` | both | OAuth client for the calendar scope |
+| `CALENDAR_TOKEN_FILE_PATH` | see below | both | Calendar token file |
+| `CALENDAR_SYNC_DAYS_BACK` | `7` | collector | Days before today in the rolling re-sync window |
+| `CALENDAR_SYNC_DAYS_AHEAD` | `1` | collector | Days after today in the rolling re-sync window |
+| `CALENDAR_API_BASE_URL` | `https://www.googleapis.com/calendar/v3` | collector | Calendar API root |
+| `CALENDAR_REDIRECT_URI` | `http://localhost:8000/api/calendar/callback` | API | Redirect target of the API connect flow |
+| `CALENDAR_AI_INCLUDE_TITLES` | `true` | API | Send recurring series titles to Gemini; `false` replaces them with `series-N` |
+| `API_UID` | `10001` | Compose | uid the API container builds and runs as; align it with the collector |
+
+Unset, `CALENDAR_TOKEN_FILE_PATH` defaults to `./tokens/google_calendar.token` in the API and
+to `google_calendar.token` beside `TOKEN_FILE_PATH` in the collector; Compose pins both to
+`/app/tokens/google_calendar.token`, which is the same host file.
+
+Every one of these has a row in `.env.example` and is passed through in `compose.yml`, to the
+service that reads it. None of them is required: with `CALENDAR_SYNC_ENABLED` unset the
+collector builds no calendar provider at all and the rest are inert.
+
+## Privacy
+
+The connected scope is read-only and limited to events. Attendee email addresses and event
+descriptions are never stored — only the attendee count. Tokens never appear in logs, in error
+messages or in API responses.
