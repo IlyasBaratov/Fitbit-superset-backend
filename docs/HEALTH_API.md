@@ -15,6 +15,13 @@ All routes require the existing `Authorization: Bearer <AI_API_TOKEN>` header. I
 | /api/health/calendar | Calendar Events |
 | /api/devices | Latest Device Metadata and DeviceBatteryLevel observations |
 
+Google Health ECG and irregular rhythm collection requires separate read scopes:
+`https://www.googleapis.com/auth/googlehealth.ecg.readonly` and
+`https://www.googleapis.com/auth/googlehealth.irn.readonly`. If the collector logs
+`MISSING_OAUTH_SCOPE` for either data type, reauthorize the Health connection with
+that scope in addition to the existing scopes, then replace its saved refresh
+token. An authorized account can still have no records for a data type.
+
 Health routes accept `?period=7d`; omitted periods use AI_DEFAULT_ANALYSIS_DAYS. Maximum is AI_MAX_ANALYSIS_DAYS (at most 90). The interval runs from midnight in the configured timezone on the first included day through now, with an inclusive start and exclusive end. Unknown query parameters are rejected. Devices accepts no query parameters and returns the latest stored observations regardless of age, including their timestamps.
 
 Health responses contain `start`, `end` (UTC timestamps), `timezone`, and `series`. Each series has `measurement`, `resolution` (`hourly` or `stored`), and `rows`; each row contains a UTC `timestamp` and `fields`. Intraday fields are sum, count, min and max. Other measurements retain the selected stored fields and identity-related activity/sleep fields. Absent measurements have empty row lists; no synthetic data is returned.
