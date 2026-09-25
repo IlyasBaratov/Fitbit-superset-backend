@@ -6,12 +6,12 @@ services:
       context: .
       dockerfile: Dockerfile.api
       args:
-        API_UID: "${API_UID:-10001}"
+        API_UID: "${API_UID:-1000}"
     image: fitbit-ai-api:latest
     restart: unless-stopped
     read_only: true
     # Must match the collector's appuser: docker compose exec fitbit-fetch-data id -u
-    user: "${API_UID:-10001}"
+    user: "${API_UID:-1000}"
     tmpfs:
       - /tmp
     volumes:
@@ -42,6 +42,8 @@ services:
       CALENDAR_IDS: "${CALENDAR_IDS:-primary}"
       CALENDAR_CLIENT_ID: "${CALENDAR_CLIENT_ID:-}"
       CALENDAR_CLIENT_SECRET: "${CALENDAR_CLIENT_SECRET:-}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
       CALENDAR_TOKEN_FILE_PATH: /app/tokens/google_calendar.token
       CALENDAR_REDIRECT_URI: "${CALENDAR_REDIRECT_URI:-http://localhost:8000/api/calendar/callback}"
       CALENDAR_AI_INCLUDE_TITLES: "${CALENDAR_AI_INCLUDE_TITLES:-true}"

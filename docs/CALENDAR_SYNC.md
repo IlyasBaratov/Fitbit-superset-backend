@@ -96,7 +96,7 @@ uid:
 
 ```bash
 docker compose exec fitbit-fetch-data id -u     # e.g. 1000
-echo 'API_UID=1000' >> .env                     # default 10001
+# Set API_UID in .env only if the collector's uid differs from the default 1000.
 docker compose up -d --build ai-api
 ```
 
@@ -338,7 +338,7 @@ failing an analysis that also covers health data (D1).
 | `CALENDAR_API_BASE_URL` | `https://www.googleapis.com/calendar/v3` | collector | Calendar API root |
 | `CALENDAR_REDIRECT_URI` | `http://localhost:8000/api/calendar/callback` | API | Redirect target of the API connect flow |
 | `CALENDAR_AI_INCLUDE_TITLES` | `true` | API | Send recurring series titles to Gemini; `false` replaces them with `series-N` |
-| `API_UID` | `10001` | Compose | uid the API container builds and runs as; align it with the collector |
+| `API_UID` | `1000` | Compose | uid the API container builds and runs as; align it with the collector |
 
 Unset, `CALENDAR_TOKEN_FILE_PATH` defaults to `./tokens/google_calendar.token` in the API and
 to `google_calendar.token` beside `TOKEN_FILE_PATH` in the collector; Compose pins both to

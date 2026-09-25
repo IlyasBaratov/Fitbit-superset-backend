@@ -190,7 +190,7 @@ CALENDAR_SYNC_DAYS_AHEAD=1
 CALENDAR_API_BASE_URL=https://www.googleapis.com/calendar/v3
 CALENDAR_REDIRECT_URI=http://localhost:8000/api/calendar/callback
 CALENDAR_AI_INCLUDE_TITLES=true
-API_UID=10001
+API_UID=1000
 ```
 
 `CALENDAR_SYNC_ENABLED`, `CALENDAR_SYNC_DAYS_*` and `CALENDAR_API_BASE_URL` are read by the
