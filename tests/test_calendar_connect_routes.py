@@ -3,7 +3,9 @@
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import json
+import os
 from pathlib import Path
+import stat
 import urllib.parse
 from unittest.mock import Mock
 import pytest
@@ -109,7 +111,8 @@ def test_callback_stores_the_token_without_echoing_any_of_it(setup):
     saved = json.loads(token_file.read_text(encoding="utf-8"))
     assert saved["provider"] == "google_calendar"
     assert saved["refresh_token"] == "calendar-refresh"
-    assert oct(token_file.stat().st_mode)[-3:] == "600"
+    if os.name == "posix":
+        assert stat.S_IMODE(token_file.stat().st_mode) == 0o600
     sent = session.post.call_args
     assert sent.args[0] == "https://oauth2.googleapis.com/token"
     assert sent.kwargs["data"]["code"] == "granted"
