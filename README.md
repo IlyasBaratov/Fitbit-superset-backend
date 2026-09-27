@@ -49,6 +49,10 @@ application is also syntax-checked against that runtime during Docker validation
 
 ## Docker stack
 
+For Oracle Cloud Container Instances, use the dedicated
+[deployment guide](docs/OCI_CONTAINER_INSTANCES.md). Container Instances use
+published images and persistent external storage rather than this Compose file.
+
 The included `compose.yml` runs this repository's data collector, the AI/health read
 API, InfluxDB 1.11, and Grafana:
 
