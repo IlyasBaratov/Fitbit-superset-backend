@@ -6,10 +6,10 @@ from app.ai.analytics import Window, analyze, average, number
 from app.calendar.insights import MIN_CORRELATION_DAYS
 
 GROUPS = {
-    "sleep": {"Sleep Summary", "Sleep Levels", "RestingHR", "HRV", "BreathingRate", "SPO2", "Skin Temperature Variation"},
+    "sleep": {"Sleep Summary", "Sleep Levels", "Sleep Respiratory Rate", "RestingHR", "HRV", "BreathingRate", "SPO2", "Skin Temperature Variation"},
     "activity": {"Total Steps", "Steps_Intraday", "Activity Minutes", "calories", "distance", "HR zones"},
     "workouts": {"Activity Records", "HR zones", "HeartRate_Intraday", "Sleep Summary", "HRV", "RestingHR"},
-    "recovery": {"HRV", "RestingHR", "Sleep Summary", "SPO2", "BreathingRate", "Skin Temperature Variation", "Activity Records"},
+    "recovery": {"HRV", "RestingHR", "Sleep Summary", "Sleep Respiratory Rate", "SPO2", "BreathingRate", "Skin Temperature Variation", "Activity Records"},
     "cardiovascular": {"RestingHR", "HeartRate_Intraday", "HRV", "SPO2", "SPO2_Intraday", "BreathingRate"},
     "body": {"weight", "height", "bmi"},
     "calendar": {"Calendar Events", "HeartRate_Intraday", "Steps_Intraday", "RestingHR", "HRV", "Sleep Summary"},
@@ -24,7 +24,7 @@ KEYWORDS = {
     "calendar": r"meeting|calendar|event|appointment|busy day|schedule",
 }
 PRIMARY = {
-    "sleep": {"Sleep Summary", "Sleep Levels"}, "activity": GROUPS["activity"],
+    "sleep": {"Sleep Summary", "Sleep Levels", "Sleep Respiratory Rate"}, "activity": GROUPS["activity"],
     "workouts": {"Activity Records"}, "recovery": {"HRV", "RestingHR", "Sleep Summary", "SPO2", "BreathingRate", "Skin Temperature Variation"},
     "cardiovascular": GROUPS["cardiovascular"], "body": GROUPS["body"],
     "calendar": {"Calendar Events"},

@@ -68,6 +68,7 @@ FIELDS = {
     "hrv_deep_rmssd": ("recovery", "HRV", "deepRmssd", "ms"),
     "spo2": ("recovery", "SPO2", "avg", "percent"),
     "breathing_rate": ("recovery", "BreathingRate", "value", "breaths/min"),
+    "sleep_breathing_rate": ("recovery", "Sleep Respiratory Rate", "fullBpm", "breaths/min"),
     "skin_temperature_deviation": ("recovery", "Skin Temperature Variation", "RelativeValue", "C"),
     "weight": ("body", "weight", "weightKg", "kg"),
     "height": ("body", "height", "heightCm", "cm"),
@@ -155,11 +156,11 @@ def analyze(data, window):
     for row in unique(data.get("Activity Minutes", [])):
         day = window.day(row)
         values = [row.get(f) for f in ("minutesLightlyActive", "minutesFairlyActive", "minutesVeryActive")]
-        if day and all(number(v) for v in values):
-            active[day] = sum(values)
+        if day and any(number(v) for v in values):
+            active[day] = sum(v for v in values if number(v))
             s = row.get("minutesSedentary")
-            if number(s) and sum(values)+s > 0:
-                sedentary[day] = s / (sum(values)+s) * 100
+            if number(s) and active[day]+s > 0:
+                sedentary[day] = s / (active[day]+s) * 100
     add("active_minutes", "activity", "Activity Minutes", "minutes", active)
     add("sedentary_percent", "activity", "Activity Minutes", "percent", sedentary)
 

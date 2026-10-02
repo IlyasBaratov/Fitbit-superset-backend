@@ -44,9 +44,20 @@ def map_sleep(
         efficiency = sleep_efficiency(
             minutes_asleep, minutes_in_period, summary.get("efficiency")
         )
-        is_main_sleep = str(
-            bool(sleep.get("metadata", {}).get("processed", True))
-        ).lower()
+        is_main_sleep = str(bool(sleep.get("metadata", {}).get("mainSleep", True))).lower()
+        short_awakenings = sleep.get("shortAwakenings") or []
+        short_awake_seconds = 0
+        for awakening in short_awakenings:
+            try:
+                beginning = datetime.fromisoformat(
+                    awakening["startTime"].replace("Z", "+00:00")
+                )
+                ending = datetime.fromisoformat(
+                    awakening["endTime"].replace("Z", "+00:00")
+                )
+                short_awake_seconds += max(0, int((ending - beginning).total_seconds()))
+            except (KeyError, TypeError, ValueError):
+                continue
         sleep_session_id = stable_resource_id(data_point.get("name"))
         interval = sleep.get("interval", {})
         start_time_str = interval.get("startTime") or ts
@@ -68,6 +79,14 @@ def map_sleep(
                         "minutesLight": minutes_light,
                         "minutesREM": minutes_rem,
                         "minutesDeep": minutes_deep,
+                        **(
+                            {
+                                "shortAwakeningCount": len(short_awakenings),
+                                "shortAwakeningSeconds": short_awake_seconds,
+                            }
+                            if "shortAwakenings" in sleep
+                            else {}
+                        ),
                         "startTime": start_time_str,
                         "endTime": session_end_time_str,
                     }

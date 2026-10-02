@@ -9,6 +9,42 @@ from app.providers.google_health.parsing import extract_first_numeric
 logger = logging.getLogger(__name__)
 
 
+def map_sleep_respiratory_rate(
+    data: Mapping[str, Any],
+    start_date_str: str,
+    end_date_str: str,
+    device_name: str,
+    local_timezone: BaseTzInfo,
+) -> list[HealthPoint]:
+    records = []
+    for data_point, ts in data.get("respiratory-rate-sleep-summary", []):
+        summary = data_point.get("respiratoryRateSleepSummary", {})
+        fields = {}
+        for stage, source in (
+            ("full", "fullSleepStats"),
+            ("light", "lightSleepStats"),
+            ("deep", "deepSleepStats"),
+            ("rem", "remSleepStats"),
+        ):
+            stats = summary.get(source) or {}
+            for field, key in (
+                ("Bpm", "breathsPerMinute"),
+                ("Stddev", "standardDeviation"),
+                ("SignalToNoise", "signalToNoise"),
+            ):
+                value = extract_first_numeric(stats.get(key))
+                if value is not None:
+                    fields[stage + field] = float(value)
+        if fields:
+            records.append(HealthPoint.from_record({
+                "measurement": "Sleep Respiratory Rate",
+                "time": ts,
+                "tags": {"Device": device_name},
+                "fields": fields,
+            }))
+    return records
+
+
 def map_hrv(
     data: Mapping[str, Any],
     start_date_str: str,

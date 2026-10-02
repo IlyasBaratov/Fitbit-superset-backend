@@ -106,6 +106,7 @@ class GoogleHealthProvider:
         for kind, mapper in (
             ("daily-heart-rate-variability", vitals.map_hrv),
             ("daily-respiratory-rate", vitals.map_breathing),
+            ("respiratory-rate-sleep-summary", vitals.map_sleep_respiratory_rate),
             ("daily-sleep-temperature-derivations", vitals.map_temperature),
             ("oxygen-saturation", vitals.map_oxygen),
         ):
@@ -165,6 +166,7 @@ class GoogleHealthProvider:
         )
         for kinds, mapper in (
             (["active-zone-minutes"], activity.map_zones),
+            (["active-minutes"], activity.map_active_minutes),
             (["steps", "total-calories"], activity.map_daily_totals),
             (["distance"], activity.map_distance),
             (["sedentary-period"], activity.map_sedentary),

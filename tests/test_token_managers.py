@@ -118,3 +118,25 @@ def test_google_retains_refresh_token_and_sanitizes_errors(token_settings):
         manager.refresh()
     assert "original-secret" not in str(error.value)
     assert json.loads(path.read_text())["access_token"] == "new-access"
+
+
+def test_google_refresh_removes_non_health_and_write_scopes(token_settings):
+    from app.providers.google_health.auth import GoogleTokenManager
+
+    path = Path(token_settings.token_file_path)
+    path.write_text(json.dumps({"provider": "google", "refresh_token": "secret"}))
+    base = "https://www.googleapis.com/auth/"
+    first = Mock(status_code=200)
+    first.json.return_value = {
+        "access_token": "broad",
+        "scope": " ".join((base + "cloud-platform", base + "googlehealth.sleep.readonly", base + "googlehealth.activity_and_fitness.writeonly")),
+    }
+    second = Mock(status_code=200)
+    second.json.return_value = {"access_token": "health-only", "scope": base + "googlehealth.sleep.readonly"}
+    session = Mock()
+    session.post.side_effect = [first, second]
+
+    assert GoogleTokenManager(token_settings, session).refresh() == "health-only"
+    assert session.post.call_count == 2
+    assert session.post.call_args.kwargs["data"]["scope"] == base + "googlehealth.sleep.readonly"
+    assert json.loads(path.read_text())["access_token"] == "health-only"

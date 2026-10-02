@@ -34,8 +34,9 @@ therefore updates the same point.
 | `calories` | — | `value` float | Daily kcal |
 | `distance` | — | `value` float | Daily km |
 | `GPS` | `ActivityName` | `ActivityId` string; `lat`, `lon`, `altitude`, `distance`, `speed_kph` float; `heart_rate` integer | Optional; never estimated |
-| `Sleep Summary` | `isMainSleep` (`true`/`false`) | `SleepSessionId`, `startTime`, `endTime` string; `efficiency`, `minutesAfterWakeup`, `minutesAsleep`, `minutesAwake`, `minutesDeep`, `minutesInBed`, `minutesLight`, `minutesREM`, `minutesToFallAsleep` integer | Session start time; calculated efficiency only when absent |
+| `Sleep Summary` | `isMainSleep` (`true`/`false`) | `SleepSessionId`, `startTime`, `endTime` string; `efficiency`, `minutesAfterWakeup`, `minutesAsleep`, `minutesAwake`, `minutesDeep`, `minutesInBed`, `minutesLight`, `minutesREM`, `minutesToFallAsleep`, `shortAwakeningCount`, `shortAwakeningSeconds` integer | Session start time; calculated efficiency only when absent; short awakenings are separate from stage intervals |
 | `Sleep Levels` | `isMainSleep` (`true`/`false`) | `SleepSessionId`, `stageName` string; `level`, `duration_seconds` integer | Stage start time; deep=0, light=1, rem=2, awake=3, unknown=4 |
+| `Sleep Respiratory Rate` | — | `fullBpm`, `lightBpm`, `deepBpm`, `remBpm`, and matching `Stddev` and `SignalToNoise` float fields | Sleep respiratory summary; only returned stage statistics are stored |
 | `SPO2` | — | `avg`, `min`, `max` float | Daily percent; only returned bounds |
 | `SPO2_Intraday` | — | `value` float | Percent; actual sample time |
 | `BreathingRate` | — | `value` float | Breaths/minute |

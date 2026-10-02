@@ -20,6 +20,7 @@ def test_vitals_body_and_google_specific_fields(monkeypatch):
     samples = {
       "daily-heart-rate-variability": [({"dailyHeartRateVariability": {"averageHeartRateVariabilityMilliseconds": 42, "entropy": 2, "nonRemHeartRateBeatsPerMinute": 55}}, ts)],
       "daily-respiratory-rate": [({"dailyRespiratoryRate": {"breathsPerMinute": 16}}, ts)],
+      "respiratory-rate-sleep-summary": [({"respiratoryRateSleepSummary": {"fullSleepStats": {"breathsPerMinute": 15.5}, "deepSleepStats": {"breathsPerMinute": 14.2}}}, ts)],
       "daily-sleep-temperature-derivations": [({"dailySleepTemperatureDerivations": {"nightlyTemperatureCelsius": 35, "baselineTemperatureCelsius": 34, "relativeNightlyStddev30dCelsius": 0.2}}, ts)],
       "oxygen-saturation": [({"oxygenSaturation": {"percentage": 98}}, ts)],
       "weight": [({"weight": {"sampleTime": {"physicalTime": ts}, "weightGrams": 80000}}, ts)]}
@@ -30,7 +31,8 @@ def test_vitals_body_and_google_specific_fields(monkeypatch):
     client.get_google_session_datapoints_for_date_range.side_effect = lambda kind, *_: sessions.get(kind, [])
     client.request_google_data_points_list.return_value = {"dataPoints": [{"height": {"sampleTime": {"physicalTime": "2026-08-01T00:00:00Z"}, "heightMillimeters": 1840}}]}
     points = {point.measurement: point for point in api.fetch_daily_group("30d", "2026-08-20", "2026-08-20")}
-    assert set(points) == {"HRV", "BreathingRate", "Skin Temperature Variation", "SPO2_Intraday", "Electrocardiogram", "Irregular Rhythm Notifications", "height", "weight", "bmi"}
+    assert set(points) == {"HRV", "BreathingRate", "Sleep Respiratory Rate", "Skin Temperature Variation", "SPO2_Intraday", "Electrocardiogram", "Irregular Rhythm Notifications", "height", "weight", "bmi"}
+    assert points["Sleep Respiratory Rate"].fields["fullBpm"] == 15.5
     assert points["HRV"].fields["entropy"] == 2
     assert points["weight"].fields["value"] == 80
     assert points["bmi"].fields["value"] == 23.63
@@ -43,10 +45,31 @@ def test_vitals_body_and_google_specific_fields(monkeypatch):
 
 def test_daily_rollup_measurements(monkeypatch):
     api, client = provider(monkeypatch)
-    values = {"active-zone-minutes": {"activeZoneMinutes": {"sumInFatBurnHeartZone": 10, "sumInCardioHeartZone": 5, "totalActiveZoneMinutes": 20}}, "steps": {"steps": {"countSum": 1000}}, "total-calories": {"totalCalories": {"kcalSum": 2000}}, "distance": {"distance": {"millimetersSum": 1500000}}, "sedentary-period": {"sedentaryPeriod": {"durationSum": "3600s"}}}
+    values = {"active-zone-minutes": {"activeZoneMinutes": {"sumInFatBurnHeartZone": 10, "sumInCardioHeartZone": 5, "totalActiveZoneMinutes": 20}}, "active-minutes": {"activeMinutes": {"activeMinutesRollupByActivityLevel": [{"activityLevel": "LIGHT", "activeMinutesSum": "52"}]}}, "steps": {"steps": {"countSum": 1000}}, "total-calories": {"totalCalories": {"kcalSum": 2000}}, "distance": {"distance": {"millimetersSum": 1500000}}, "sedentary-period": {"sedentaryPeriod": {"durationSum": "3600s"}}}
     client.request_google_data_points_daily_rollup.side_effect = lambda kind, _: {"rollupDataPoints": [values[kind]]}
-    points = {p.measurement: p for p in api.fetch_daily_group("365d", "2026-08-20", "2026-08-20")}
+    results = api.fetch_daily_group("365d", "2026-08-20", "2026-08-20")
+    points = {p.measurement: p for p in results}
     assert points["distance"].fields["value"] == 1.5
     assert points["Total Steps"].fields["value"] == 1000.0
     assert points["Activity Minutes"].fields["minutesSedentary"] == 60
+    assert any(p.measurement == "Activity Minutes" and p.fields.get("minutesLightlyActive") == 52 for p in results)
     assert points["HR zones"].fields["TotalActiveZoneMinutes"] == 20
+
+
+def test_sleep_main_flag_and_short_awakenings_use_live_fields(monkeypatch):
+    api, client = provider(monkeypatch)
+    start = "2026-08-20T05:00:00Z"
+    end = "2026-08-20T06:00:00Z"
+    client.get_google_datapoints_for_date_range.return_value = [({
+        "name": "users/me/dataTypes/sleep/dataPoints/session",
+        "sleep": {
+            "interval": {"startTime": start, "endTime": end},
+            "metadata": {"mainSleep": False, "processed": True},
+            "summary": {"minutesAsleep": 50, "minutesInSleepPeriod": 60},
+            "shortAwakenings": [{"startTime": start, "endTime": "2026-08-20T05:00:30Z"}],
+        },
+    }, start)]
+    summary = next(p for p in api.fetch_daily_group("100d", "2026-08-20", "2026-08-20") if p.measurement == "Sleep Summary")
+    assert summary.tags["isMainSleep"] == "false"
+    assert summary.fields["shortAwakeningCount"] == 1
+    assert summary.fields["shortAwakeningSeconds"] == 30

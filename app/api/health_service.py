@@ -17,7 +17,7 @@ from app.api.schemas.health import (
 
 HEALTH_MEASUREMENTS = {
     "heart-rate": ("HeartRate_Intraday", "RestingHR", "HRV", "HR zones"),
-    "sleep": ("Sleep Summary", "Sleep Levels"),
+    "sleep": ("Sleep Summary", "Sleep Levels", "Sleep Respiratory Rate"),
     "activity": (
         "Steps_Intraday",
         "Total Steps",

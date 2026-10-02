@@ -58,6 +58,44 @@ def map_resting(
     return [HealthPoint.from_record(record) for record in records]
 
 
+def map_active_minutes(
+    data: Mapping[str, Any],
+    start_date_str: str,
+    end_date_str: str,
+    device_name: str,
+    local_timezone: BaseTzInfo,
+) -> list[HealthPoint]:
+    fields_by_level = {
+        "LIGHT": "minutesLightlyActive",
+        "LIGHTLY_ACTIVE": "minutesLightlyActive",
+        "MODERATE": "minutesFairlyActive",
+        "MODERATELY_ACTIVE": "minutesFairlyActive",
+        "VIGOROUS": "minutesVeryActive",
+        "VERY_ACTIVE": "minutesVeryActive",
+    }
+    records = []
+    current = datetime.strptime(start_date_str, "%Y-%m-%d")
+    last = datetime.strptime(end_date_str, "%Y-%m-%d")
+    while current <= last:
+        fields = {}
+        response = _rollup(data, "active-minutes", current)
+        for point in response.get("rollupDataPoints", []) if isinstance(response, dict) else []:
+            for level in point.get("activeMinutes", {}).get("activeMinutesRollupByActivityLevel", []):
+                key = fields_by_level.get(level.get("activityLevel"))
+                value = extract_first_numeric(level.get("activeMinutesSum"))
+                if key and value is not None:
+                    fields[key] = fields.get(key, 0) + int(value)
+        if fields:
+            records.append(HealthPoint.from_record({
+                "measurement": "Activity Minutes",
+                "time": local_timezone.localize(current).astimezone(pytz.utc).isoformat(),
+                "tags": {"Device": device_name},
+                "fields": fields,
+            }))
+        current += timedelta(days=1)
+    return records
+
+
 def map_zones(
     data: Mapping[str, Any],
     start_date_str: str,

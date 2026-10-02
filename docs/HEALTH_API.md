@@ -5,7 +5,7 @@ All routes require the existing `Authorization: Bearer <AI_API_TOKEN>` header. I
 | GET route | Measurements |
 | --- | --- |
 | /api/health/heart-rate | HeartRate_Intraday, RestingHR, HRV, HR zones |
-| /api/health/sleep | Sleep Summary, Sleep Levels |
+| /api/health/sleep | Sleep Summary, Sleep Levels, Sleep Respiratory Rate |
 | /api/health/activity | Steps_Intraday, Total Steps, calories, distance, Activity Minutes |
 | /api/health/workouts | Activity Records |
 | /api/health/spo2 | SPO2, SPO2_Intraday |
@@ -14,6 +14,13 @@ All routes require the existing `Authorization: Bearer <AI_API_TOKEN>` header. I
 | /api/health/irn | Irregular Rhythm Notifications |
 | /api/health/calendar | Calendar Events |
 | /api/devices | Latest Device Metadata and DeviceBatteryLevel observations |
+
+Google Health currently exposes sleep duration, stages, efficiency, short awakenings,
+sleep respiratory statistics, and related nightly HRV, SpO2, breathing rate, and
+temperature signals. It does not expose a Fitbit Sleep Score or Daily Readiness
+Score data type. `efficiency` is the percentage of time in bed spent asleep; it
+must not be labeled as Sleep Score. `/api/ai/recovery` analyzes available signals
+but does not return an official Fitbit recovery or readiness score.
 
 Google Health ECG and irregular rhythm collection requires separate read scopes:
 `https://www.googleapis.com/auth/googlehealth.ecg.readonly` and

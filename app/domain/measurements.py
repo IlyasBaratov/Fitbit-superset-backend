@@ -71,6 +71,8 @@ FIELD_TYPES: dict[str, dict[str, type]] = {
         "minutesLight": int,
         "minutesREM": int,
         "minutesToFallAsleep": int,
+        "shortAwakeningCount": int,
+        "shortAwakeningSeconds": int,
         "startTime": str,
         "endTime": str,
     },
@@ -79,6 +81,10 @@ FIELD_TYPES: dict[str, dict[str, type]] = {
         "level": int,
         "stageName": str,
         "duration_seconds": int,
+    },
+    "Sleep Respiratory Rate": {
+        **{stage + suffix: float for stage in ("full", "light", "deep", "rem")
+           for suffix in ("Bpm", "Stddev", "SignalToNoise")},
     },
     "SPO2": {"avg": float, "min": float, "max": float},
     "SPO2_Intraday": {"value": float},
