@@ -33,7 +33,7 @@ goal must be configuration/profile inputs rather than permanent constants in the
 
 ## Status
 
-- [ ] S1 Verify raw heart-rate retention and add a raw sleep-window query
+- [x] S1 Verify raw heart-rate retention and add a raw sleep-window query
 - [ ] S2 Persist all sleep inputs needed by the score engine
 - [ ] S3 Build the sleep-session normalization model
 - [ ] S4 Implement exact sleep efficiency, restlessness, interruptions and full awakenings
@@ -717,6 +717,12 @@ Do not add Gemini as a dependency of this endpoint.
 ## Tasks
 
 ### S1 · Verify raw heart-rate retention and add a raw sleep-window query
+
+Completed 2026-10-04: the running local InfluxDB 1.x has an unlimited `autogen` retention policy.
+The seven labeled sleep windows contain 8,553–12,824 raw `HeartRate_Intraday` samples each,
+typically 23–25 samples per minute. The new identity-scoped read is limited to one 24-hour
+window and 20,000 rows without `GROUP BY`; the existing hourly public read is unchanged.
+Retention on any separate deployment remains to be checked there.
 
 **Work**
 1. Inspect real Influx rows for `HeartRate_Intraday` during a known sleep interval.
