@@ -38,7 +38,7 @@ goal must be configuration/profile inputs rather than permanent constants in the
 - [x] S3 Build the sleep-session normalization model
 - [x] S4 Implement exact sleep efficiency, restlessness, interruptions and full awakenings
 - [x] S5 Implement Time to Sound Sleep v1
-- [ ] S6 Implement high-resolution sleep-HR epoch generation
+- [x] S6 Implement high-resolution sleep-HR epoch generation
 - [ ] S7 Implement and calibrate Sound Sleep v1
 - [ ] S8 Implement Sleep Score Emulator v0.1
 - [ ] S9 Add versioned sleep-score schemas and endpoint
@@ -789,6 +789,14 @@ Implement first Deep, first REM, and provisional stable-Light candidates. For th
 first-Deep path must reproduce `16,13,14,19,23,20,26`.
 
 ### S6 · Implement high-resolution sleep-HR epoch generation
+
+Completed 2026-10-04: pure one-minute UTC epochs use medians of valid raw BPM
+samples within the session. Each epoch carries sample count, stage, short-wake
+and long-interruption state; unknown wake state remains unknown. Partial session
+boundary minutes retain their exact overlap duration. The provisional quality
+cutoff is 10 HR samples per minute, based on the measured 20–25/minute cadence
+on the seven owner nights; sparse minutes have unknown HR. This cutoff is not
+a low/steady-HR classifier threshold.
 
 Join raw HR samples to the sleep interval, aggregate robustly to minute medians, assign stage/awakening flags,
 and expose data-quality counts.
