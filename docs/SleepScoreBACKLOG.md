@@ -43,7 +43,7 @@ goal must be configuration/profile inputs rather than permanent constants in the
 - [x] S8 Implement Sleep Score Emulator v0.1
 - [x] S9 Add versioned sleep-score schemas and endpoint
 - [x] S10 Add unit, calibration and route tests
-- [ ] S11 Document caveats, confidence and missing-data behavior
+- [x] S11 Document caveats, confidence and missing-data behavior
 - [ ] S12 Collect more Google-labeled nights and calibrate v0.2
 
 ---
@@ -871,6 +871,13 @@ Minimum tests:
 - endpoint never calls Gemini.
 
 ### S11 · Document caveats, confidence and missing-data behavior
+
+Completed 2026-10-04: `docs/HEALTH_API.md` documents the v0.1 formula,
+configuration, response fields, confidence labels, missing-data rules,
+unweighted components and in-sample calibration errors. Google-proprietary
+thresholds and weights remain unknown. S7 calibration and S12 collection
+remain open; later real labeled nights must support independent Sound Sleep
+and Stable Light validation plus a held-out score evaluation.
 
 Put formulas and constants in API docs. State clearly that the score is experimental, user-specific calibration
 is small, Google internals are proprietary, and changes require a new model version.

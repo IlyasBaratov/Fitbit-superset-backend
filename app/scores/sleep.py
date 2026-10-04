@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, Mapping
 from math import floor, isfinite
@@ -96,7 +96,8 @@ def _number(value: Any) -> float | None:
     if value is None:
         return None
     try:
-        return float(value)
+        parsed = float(value)
+        return parsed if isfinite(parsed) else None
     except (TypeError, ValueError):
         return None
 
