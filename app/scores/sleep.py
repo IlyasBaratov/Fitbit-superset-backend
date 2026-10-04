@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, Mapping
+from math import floor, isfinite
 import pytz
 
 
@@ -60,6 +61,23 @@ class TimeToSoundSleep:
     minutes: float | None
     method: str | None
     flags: tuple[str, ...] = ()
+
+
+SLEEP_SCORE_MODEL_VERSION = "sleep-score-emulator-v0.1"
+DURATION_SHORTFALL_WEIGHT = 0.163
+TIME_TO_SOUND_SLEEP_WEIGHT = 0.606
+RESTLESSNESS_WEIGHT = 0.123
+INTERRUPTION_WEIGHT = 0.124
+
+
+@dataclass(frozen=True)
+class SleepScoreResult:
+    raw_score: float | None
+    score: int | None
+    insufficient_data: bool
+    confidence: str
+    components: dict[str, dict[str, float | int | str | None]]
+    flags: tuple[str, ...]
 
 
 def aware_utc(value: datetime | str) -> datetime:
@@ -281,3 +299,63 @@ def time_to_sound_sleep(
     if start < session.start_time or start >= session.end_time:
         return TimeToSoundSleep(None, None, flags + ("sound_start_outside_session",))
     return TimeToSoundSleep((start - session.start_time).total_seconds() / 60, method, flags)
+
+
+def score_sleep_session(
+    session: SleepSessionFeatures,
+    tts: TimeToSoundSleep,
+    sound_sleep_minutes: float | None = None,
+    sound_sleep_method: str = "unavailable_uncalibrated_hr_classifier",
+) -> SleepScoreResult:
+    """Apply only the four fixed empirical v0.1 terms, without I/O or LLMs."""
+    asleep = session.minutes_asleep
+    goal = session.sleep_goal_minutes
+    shortfall = (
+        max(0.0, goal - asleep)
+        if asleep is not None and isfinite(asleep) and asleep >= 0
+        and isfinite(goal) and goal > 0
+        else None
+    )
+    restless = restlessness_minutes(session)
+    interruption = interruption_minutes(session)
+    awakenings = full_awakenings_count(session)
+    efficiency = sleep_efficiency_percent(session)
+    duration_penalty = None if shortfall is None else DURATION_SHORTFALL_WEIGHT * shortfall
+    tts_penalty = None if tts.minutes is None else TIME_TO_SOUND_SLEEP_WEIGHT * tts.minutes
+    restlessness_penalty = None if restless is None else RESTLESSNESS_WEIGHT * restless
+    interruption_penalty = None if interruption is None else INTERRUPTION_WEIGHT * interruption
+    components = {
+        "duration": {"minutes_asleep": asleep, "goal_minutes": goal,
+                     "shortfall_minutes": shortfall, "penalty": duration_penalty,
+                     "method": "goal_shortfall"},
+        "time_to_sound_sleep": {"minutes": tts.minutes, "method": tts.method,
+                                "penalty": tts_penalty},
+        "sound_sleep": {"minutes": sound_sleep_minutes, "method": sound_sleep_method,
+                        "penalty": None},
+        "restlessness": {"minutes": restless, "method": "short_awakening_seconds_or_intervals",
+                         "penalty": restlessness_penalty},
+        "interruptions": {"minutes": interruption, "method": "internal_awake_over_5_minutes",
+                          "penalty": interruption_penalty},
+        "full_awakenings": {"count": awakenings, "method": "internal_awake_over_5_minutes",
+                            "penalty": None},
+        "sleep_efficiency": {"percent": efficiency, "method": "100_asleep_over_in_bed",
+                             "penalty": None},
+    }
+    flags = list(dict.fromkeys(("experimental_formula", *session.flags, *tts.flags)))
+    if sound_sleep_minutes is None:
+        flags.append("sound_sleep_unavailable_uncalibrated")
+    for name, value in (
+        ("sleep_duration", shortfall),
+        ("time_to_sound_sleep", tts.minutes),
+        ("restlessness", restless),
+        ("interruptions", interruption),
+    ):
+        if value is None or not isfinite(value):
+            flags.append(f"missing_{name}")
+    if any(flag.startswith("missing_") for flag in flags):
+        return SleepScoreResult(None, None, True, "insufficient", components, tuple(flags))
+    raw = max(0.0, min(100.0, 100 - duration_penalty - tts_penalty
+                       - restlessness_penalty - interruption_penalty))
+    score = floor(raw + 0.5)
+    confidence = "experimental_approximate" if "tts_approximation_no_hr" in flags else "experimental"
+    return SleepScoreResult(raw, score, False, confidence, components, tuple(flags))

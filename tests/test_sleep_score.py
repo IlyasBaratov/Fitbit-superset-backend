@@ -13,6 +13,7 @@ from app.scores.sleep import (
     normalize_sleep_days,
     restlessness_minutes,
     sleep_efficiency_percent,
+    score_sleep_session,
     time_to_sound_sleep,
 )
 
@@ -120,3 +121,21 @@ def test_time_to_sound_sleep_uses_first_deep_rem_or_qualified_light():
     assert time_to_sound_sleep(stable_first, lambda *_: True).method == "stable_light"
     assert time_to_sound_sleep(stable_first, lambda *_: False).minutes == 26
     assert time_to_sound_sleep(sample_session()).minutes is None
+
+
+def test_v01_oct4_score_and_missing_restlessness():
+    start = sample_session().start_time
+    session = sample_session(
+        short_awakening_seconds=960,
+        stages=(stage(start, 0, 10, "awake"), stage(start, 10, 16, "light"),
+                stage(start, 26, 100, "deep"), stage(start, 126, 33, "awake"),
+                stage(start, 159, 100, "light")),
+    )
+    result = score_sleep_session(session, time_to_sound_sleep(session))
+    assert result.raw_score == pytest.approx(78.184)
+    assert result.score == 78
+    assert result.components["full_awakenings"]["count"] == 1
+    assert result.components["sound_sleep"]["penalty"] is None
+    missing = score_sleep_session(replace(session, short_awakening_seconds=None), time_to_sound_sleep(session))
+    assert missing.score is None and missing.insufficient_data is True
+    assert "missing_restlessness" in missing.flags

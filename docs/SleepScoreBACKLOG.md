@@ -40,7 +40,7 @@ goal must be configuration/profile inputs rather than permanent constants in the
 - [x] S5 Implement Time to Sound Sleep v1
 - [x] S6 Implement high-resolution sleep-HR epoch generation
 - [ ] S7 Implement and calibrate Sound Sleep v1
-- [ ] S8 Implement Sleep Score Emulator v0.1
+- [x] S8 Implement Sleep Score Emulator v0.1
 - [ ] S9 Add versioned sleep-score schemas and endpoint
 - [ ] S10 Add unit, calibration and route tests
 - [ ] S11 Document caveats, confidence and missing-data behavior
@@ -823,6 +823,13 @@ parameters against labeled Sound Sleep minutes. Keep calibration code/test tooli
 runtime constants.
 
 ### S8 · Implement Sleep Score Emulator v0.1
+
+Completed 2026-10-04: the pure `sleep-score-emulator-v0.1` scorer applies the
+four published coefficients to derived duration shortfall, TTS, restlessness
+and internal interruption minutes. Score is clamped to 0–100, with nearest
+integer public score and unrounded internal value. Sound Sleep, full awakenings
+and efficiency are reported without added v0.1 weights. Missing required
+features yield null score and explicit flags.
 
 Implement the current four-term formula and explicit formula version. Return raw components even when a
 component has no v0.1 weight.
