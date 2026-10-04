@@ -37,7 +37,7 @@ goal must be configuration/profile inputs rather than permanent constants in the
 - [x] S2 Persist all sleep inputs needed by the score engine
 - [x] S3 Build the sleep-session normalization model
 - [x] S4 Implement exact sleep efficiency, restlessness, interruptions and full awakenings
-- [ ] S5 Implement Time to Sound Sleep v1
+- [x] S5 Implement Time to Sound Sleep v1
 - [ ] S6 Implement high-resolution sleep-HR epoch generation
 - [ ] S7 Implement and calibrate Sound Sleep v1
 - [ ] S8 Implement Sleep Score Emulator v0.1
@@ -776,6 +776,14 @@ Implement the formulas in this file as pure functions. Include boundary tests fo
 5:01 awake, leading/trailing wake, and overlapping short awakenings.
 
 ### S5 · Implement Time to Sound Sleep v1
+
+Completed 2026-10-04: the pure candidate selector takes the earliest first Deep,
+first REM or qualified Stable Light start. Stable Light requires a continuous
+20-minute Light bout and a separately supplied HR qualifier. Until the HR rule
+is validated, Deep/REM selection carries an explicit approximation flag.
+Recomputing from the seven stored stage series gives first-Deep offsets of
+16, 13, 14, 19, 23, 20 and 26 minutes, respectively; these are derived
+stage values, not Google API score labels.
 
 Implement first Deep, first REM, and provisional stable-Light candidates. For the known seven labeled nights,
 first-Deep path must reproduce `16,13,14,19,23,20,26`.

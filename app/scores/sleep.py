@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 import pytz
 
 
@@ -52,6 +52,13 @@ class SleepSessionFeatures:
 class SleepDaySelection:
     wake_date: date
     session: SleepSessionFeatures | None
+    flags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class TimeToSoundSleep:
+    minutes: float | None
+    method: str | None
     flags: tuple[str, ...] = ()
 
 
@@ -238,3 +245,39 @@ def interruption_minutes(session: SleepSessionFeatures) -> float | None:
 def full_awakenings_count(session: SleepSessionFeatures) -> int | None:
     bouts = long_internal_awake_bouts(session)
     return None if bouts is None else len(bouts)
+
+
+LIGHT_STABLE_MINUTES = 20  # Provisional candidate duration, not a Google threshold.
+
+
+def time_to_sound_sleep(
+    session: SleepSessionFeatures,
+    stable_light_qualifier: Callable[[SleepStageInterval, SleepSessionFeatures], bool] | None = None,
+    fallback_flag: str = "tts_stable_light_unvalidated",
+) -> TimeToSoundSleep:
+    """First Deep, REM, or qualified stable Light start since the sleep attempt."""
+    candidates: list[tuple[datetime, str]] = []
+    for stage_name in ("deep", "rem"):
+        first = min(
+            (item.start for item in session.stages if item.stage == stage_name),
+            default=None,
+        )
+        if first is not None:
+            candidates.append((first, f"first_{stage_name}"))
+    if stable_light_qualifier is not None:
+        long_awake = long_internal_awake_bouts(session) or ()
+        for item in session.stages:
+            if (
+                item.stage == "light"
+                and item.seconds >= LIGHT_STABLE_MINUTES * 60
+                and not any(bout.start < item.end and bout.end > item.start for bout in long_awake)
+                and stable_light_qualifier(item, session)
+            ):
+                candidates.append((item.start, "stable_light"))
+    flags = (fallback_flag,) if stable_light_qualifier is None else ()
+    if not candidates:
+        return TimeToSoundSleep(None, None, flags + ("no_sound_sleep_candidate",))
+    start, method = min(candidates, key=lambda candidate: candidate[0])
+    if start < session.start_time or start >= session.end_time:
+        return TimeToSoundSleep(None, None, flags + ("sound_start_outside_session",))
+    return TimeToSoundSleep((start - session.start_time).total_seconds() / 60, method, flags)

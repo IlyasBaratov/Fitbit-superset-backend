@@ -13,6 +13,7 @@ from app.scores.sleep import (
     normalize_sleep_days,
     restlessness_minutes,
     sleep_efficiency_percent,
+    time_to_sound_sleep,
 )
 
 
@@ -98,3 +99,24 @@ def test_internal_awake_strict_five_minute_rule_and_edge_exclusion():
     assert interruption_minutes(sample_session(stages=stages)) == pytest.approx(33 + 301/60)
     assert full_awakenings_count(sample_session(stages=stages)) == 2
     assert interruption_minutes(sample_session()) is None
+
+
+def test_time_to_sound_sleep_uses_first_deep_rem_or_qualified_light():
+    start = sample_session().start_time
+    session = sample_session(stages=(
+        stage(start, 0, 10, "awake"),
+        stage(start, 10, 16, "light"),
+        stage(start, 26, 16, "deep"),
+        stage(start, 42, 20, "rem"),
+    ))
+    result = time_to_sound_sleep(session)
+    assert result.minutes == 26
+    assert result.method == "first_deep"
+    assert "tts_stable_light_unvalidated" in result.flags
+    rem_first = replace(session, stages=(stage(start, 5, 10, "rem"), stage(start, 26, 16, "deep")))
+    assert time_to_sound_sleep(rem_first).minutes == 5
+    stable_first = replace(session, stages=(stage(start, 0, 21, "light"), stage(start, 26, 16, "deep")))
+    assert time_to_sound_sleep(stable_first, lambda *_: True).minutes == 0
+    assert time_to_sound_sleep(stable_first, lambda *_: True).method == "stable_light"
+    assert time_to_sound_sleep(stable_first, lambda *_: False).minutes == 26
+    assert time_to_sound_sleep(sample_session()).minutes is None
