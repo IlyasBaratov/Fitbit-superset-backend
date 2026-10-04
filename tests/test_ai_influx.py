@@ -26,6 +26,16 @@ def test_intraday_aggregates_before_transfer(service):
     assert 'COUNT("value")' in sql and 'GROUP BY time(1h)' in sql
 
 
+def test_short_awakening_read_preserves_session_and_main_sleep_tag(service):
+    end = datetime.now(timezone.utc)
+    service.query("Sleep Short Awakenings", end-timedelta(days=1), end)
+    sql = service.client.query.call_args.args[0]
+    assert '"SleepSessionId"' in sql
+    assert '"duration_seconds"' in sql
+    assert '"isMainSleep"' in sql
+    assert "GROUP BY" not in sql
+
+
 def test_raw_sleep_hr_is_bounded_identity_scoped_and_not_aggregated(service):
     end = datetime.now(timezone.utc)
     service.client.query.return_value.get_points.return_value = iter([

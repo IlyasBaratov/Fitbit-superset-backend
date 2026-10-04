@@ -75,11 +75,17 @@ FIELD_TYPES: dict[str, dict[str, type]] = {
         "shortAwakeningSeconds": int,
         "startTime": str,
         "endTime": str,
+        "isProcessed": bool,
     },
     "Sleep Levels": {
         "SleepSessionId": str,
         "level": int,
         "stageName": str,
+        "duration_seconds": int,
+    },
+    "Sleep Short Awakenings": {
+        "SleepSessionId": str,
+        "endTime": str,
         "duration_seconds": int,
     },
     "Sleep Respiratory Rate": {

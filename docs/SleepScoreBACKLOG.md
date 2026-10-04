@@ -34,7 +34,7 @@ goal must be configuration/profile inputs rather than permanent constants in the
 ## Status
 
 - [x] S1 Verify raw heart-rate retention and add a raw sleep-window query
-- [ ] S2 Persist all sleep inputs needed by the score engine
+- [x] S2 Persist all sleep inputs needed by the score engine
 - [ ] S3 Build the sleep-session normalization model
 - [ ] S4 Implement exact sleep efficiency, restlessness, interruptions and full awakenings
 - [ ] S5 Implement Time to Sound Sleep v1
@@ -735,6 +735,15 @@ Retention on any separate deployment remains to be checked there.
 and the normal heart-rate endpoint still returns its existing aggregated shape.
 
 ### S2 · Persist all sleep inputs needed by the score engine
+
+Completed 2026-10-04: `Sleep Short Awakenings` now stores exact interval starts,
+ends and durations with session IDs. Missing summary fields remain absent rather
+than becoming zero. The owner-approved historical Google Health backfill recovered
+all seven labeled sessions and wrote 68 real short-awakening intervals. Stored
+summary seconds equal the interval sums on each of the seven dates, including
+Sep 27–29, whose previous summaries lacked the totals. Oct 4 stores 437 minutes
+asleep, 482 minutes in bed and 960 short-awakening seconds; its stage rows are
+available for interruption derivation.
 
 Ensure `Sleep Summary` / `Sleep Levels` retain session ID, start/end, stage durations, short-awakening count and
 seconds/intervals. Prefer exact interval data over only summary counts.

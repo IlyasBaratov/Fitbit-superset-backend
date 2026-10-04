@@ -70,7 +70,7 @@ class InfluxService:
             names = list(FIELD_TYPES[measurement])
             if measurement == "Activity Records":
                 names.append("ActivityName")
-            if measurement in {"Sleep Summary", "Sleep Levels"}:
+            if measurement in {"Sleep Summary", "Sleep Levels", "Sleep Short Awakenings"}:
                 names.append("isMainSleep")
             if measurement == CALENDAR:
                 names.extend(CALENDAR_TAGS)
