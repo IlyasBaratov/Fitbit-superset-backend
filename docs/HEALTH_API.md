@@ -57,14 +57,17 @@ awake stages are excluded. Efficiency, Sound Sleep and full awakenings have no
 independent v0.1 score weight. A displayed penalty is an emulator penalty, never
 an official Google component score.
 
-Stable Light has a provisional continuous 20-minute candidate rule, but its
-low/steady-HR classifier is unvalidated. The current endpoint uses first Deep
-or REM for TTS and flags that approximation; if HR is unavailable, it flags
-`tts_approximation_no_hr`. Sound Sleep remains `null` with
-`sound_sleep_unavailable_uncalibrated`. Candidate Sound Sleep code operates on
-minute medians of raw sleep-window HR, excludes restless and interrupted epochs,
-and requires explicit low/steady-HR parameters. No thresholds are enabled yet.
-The existing `/api/health/heart-rate` route remains hourly.
+Stable Light has a provisional continuous 20-minute candidate rule. The current
+endpoint uses first Deep or REM for TTS and flags that approximation; if HR is
+unavailable, it flags `tts_approximation_no_hr`. Sound Sleep uses the separately
+versioned experimental `sound-sleep-hr-v1-exp-2026-10-04` classifier on minute
+medians of raw sleep-window HR. It excludes restless/interrupted epochs and
+applies an owner-observation-fitted nightly robust low-HR threshold (`alpha =
+0.3`) and five-minute rolling-MAD stability threshold (`beta = 0.75` BPM).
+Missing minute HR, stage or awakening data yields `null` with
+`sound_sleep_unavailable_missing_epoch_data`; it is never zero-filled. The
+response includes eligible, unknown, HR-covered and HR-sparse minute counts,
+but no raw HR samples. The existing `/api/health/heart-rate` route remains hourly.
 
 If duration, TTS, restlessness or interruptions cannot be derived, `score` and
 `raw_score` are null, `insufficient_data` is true, `confidence` is `insufficient`,
@@ -76,14 +79,24 @@ formula. Google's exact low/steady-HR thresholds and component weights remain
 unknown; any changed formula must receive a new model version.
 
 The seven owner-provided Google Health app scores in
-`tests/fixtures/sleep_score_google_calibration.json` are the **only** fitting
-targets. All other fixture values were derived from stored Google Health API
+`tests/fixtures/sleep_score_google_calibration.json` are the only fitting
+targets for the **numeric v0.1 score**. After a later owner authorization, the
+seven app-displayed Sound Sleep minute observations became separate fitting
+targets for the experimental HR classifier. Neither type of label is an API
+field; all other fixture values were derived from stored Google Health API
 sleep records after a real short-awakening backfill. Sep 30 is excluded because
 its matching raw sleep session is missing. On these same seven fitting nights,
 v0.1 raw-score error is MAE **1.322**, median absolute error **1.184**, maximum
 absolute error **2.836**, and signed mean error **+0.174** points. This is
 **in-sample fitting error, not validated accuracy**. Later labeled nights should
 be reserved as a holdout set before making accuracy claims.
+
+The S7 Sound Sleep classifier fits six complete nights: in-sample MAE **7.833**
+minutes, median absolute error **3.5**, maximum absolute error **32**, signed
+mean error **-4.167**. Oct 1 has sparse raw HR and returns unavailable. The
+large Oct 2 miss and small sample limit confidence; the actual Google
+low/steady-HR criteria remain unknown. Reproduce the research fit with
+`python -m scripts.calibrate_sound_sleep` using a configured local InfluxDB.
 
 Google Health ECG and irregular rhythm collection requires separate read scopes:
 `https://www.googleapis.com/auth/googlehealth.ecg.readonly` and

@@ -98,6 +98,12 @@ class SoundSleepParameters:
     steady_hr_beta: float
 
 
+# Fitted on six complete owner nights against observed app Sound Sleep minutes.
+# This is an experimental emulator rule, not a Google Health API definition.
+SOUND_SLEEP_MODEL_VERSION = "sound-sleep-hr-v1-exp-2026-10-04"
+SOUND_SLEEP_PARAMETERS = SoundSleepParameters("robust", 0.3, 0.75)
+
+
 @dataclass(frozen=True)
 class SoundSleepEstimate:
     minutes: float | None
@@ -131,12 +137,17 @@ def sound_sleep_candidate(
         return SoundSleepEstimate(None, 0, 0, method)
     unknown = sum(
         epoch.minutes for index, epoch in enumerate(epochs)
-        if epoch.stage in {"light", "deep", "rem"}
-        and (
-            epoch.minute_hr is None
-            or epoch.is_short_awakening is None
-            or epoch.is_long_interruption is None
-            or any(item.minute_hr is None for item in epochs[max(0, index - 2):index + 3])
+        if (
+            epoch.stage not in {"awake", "light", "deep", "rem"}
+            or (
+                epoch.stage in {"light", "deep", "rem"}
+                and (
+                    epoch.minute_hr is None
+                    or epoch.is_short_awakening is None
+                    or epoch.is_long_interruption is None
+                    or any(item.minute_hr is None for item in epochs[max(0, index - 2):index + 3])
+                )
+            )
         )
     )
     if unknown:

@@ -2,11 +2,14 @@ from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from app.scores.sleep import HeartRateSample, Interval, SleepSessionFeatures, SleepStageInterval
 from app.scores.sleep_hr import (
+    SOUND_SLEEP_PARAMETERS,
+    SleepHREpoch,
     SoundSleepParameters,
     sleep_hr_epochs,
     sound_calibration_mae,
     sound_sleep_candidate,
 )
+from app.scores.sleep_hr_calibration import SoundCalibrationNight, fit_sound_sleep_candidates
 
 
 def sample_session():
@@ -77,3 +80,25 @@ def test_sound_candidates_require_explicit_parameters_and_complete_data():
     incomplete = replace(session, short_awakenings=None)
     result = sound_sleep_candidate(sleep_hr_epochs(incomplete), robust)
     assert result.minutes is None and result.unknown_minutes == 2
+    missing_stage = (replace(epochs[0], stage=None), epochs[1])
+    assert sound_sleep_candidate(missing_stage, robust).minutes is None
+
+
+def test_calibration_skips_incomplete_hr_and_uses_explicit_observations():
+    start = datetime(2026, 10, 4, tzinfo=timezone.utc)
+    epochs = tuple(
+        SleepHREpoch(start + timedelta(minutes=i), start + timedelta(minutes=i + 1),
+                     20, 60, "deep", False, False)
+        for i in range(3)
+    )
+    missing = (replace(epochs[0], minute_hr=None), *epochs[1:])
+    fit = fit_sound_sleep_candidates(
+        (SoundCalibrationNight("2026-10-04", epochs, 3),
+         SoundCalibrationNight("2026-10-01", missing, 2)),
+        alphas=(-1, 0), percentiles=(50,), betas=(0, 1),
+    )
+    assert fit.sample_count == 1
+    assert fit.excluded_dates == ("2026-10-01",)
+    assert fit.parameters == SoundSleepParameters("robust", -1, 0)
+    assert fit.mae == 0 and fit.predictions == (("2026-10-04", 3, 3),)
+    assert SOUND_SLEEP_PARAMETERS == SoundSleepParameters("robust", 0.3, 0.75)

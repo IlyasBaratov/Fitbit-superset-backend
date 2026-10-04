@@ -156,6 +156,9 @@ def test_seven_real_owner_score_labels_against_api_derived_features():
         "2026-10-02", "2026-10-03", "2026-10-04",
     ]
     assert [night["sleep_score"] for night in nights] == [87, 84, 80, 84, 82, 72, 77]
+    assert [night["observed_app_sound_sleep_minutes"] for night in nights] == [
+        179, 145, 152, 155, 142, 162, 159,
+    ]
     assert "2026-09-30" in fixture["excluded_wake_dates"]
     predicted, errors = [], []
     for night in nights:
