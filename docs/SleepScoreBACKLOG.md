@@ -116,6 +116,13 @@ Reference material used while designing this backlog:
 
 ## Calibration data currently available
 
+Owner clarification (2026-10-04): of the values listed below, only the seven
+`Google score` values are ground-truth targets for model fitting. TTS, Sound
+Sleep, restlessness, interruptions and full awakenings are contextual display
+observations, not public Google Health API fields or fitting targets. Production
+components must be derived from raw API records; the display values must never
+be written back as measurements or substituted for missing raw data.
+
 Sep 30 has a Google Sleep Score but no corresponding raw sleep session in the exported dataset. **Exclude
 Sep 30 from model fitting. Do not convert missing telemetry into zero sleep.** Missing data and zero are
 semantically different.
@@ -802,6 +809,14 @@ Join raw HR samples to the sleep interval, aggregate robustly to minute medians,
 and expose data-quality counts.
 
 ### S7 · Implement and calibrate Sound Sleep v1
+
+Partially implemented 2026-10-04: pure robust-threshold and percentile low-HR
+candidates, rolling five-minute MAD stability, and a research-only MAE helper
+accept explicit parameters and independently verified Sound Sleep targets.
+No low/steady-HR parameters have been fitted or enabled in production: the
+seven approved fitting targets contain only final Sleep Score labels, and
+v0.1 has no independently identifiable Sound Sleep weight. Sound Sleep and
+HR-qualified Stable Light remain unavailable until suitable evidence exists.
 
 Implement both robust-threshold and percentile low-HR candidates plus rolling-MAD stability. Grid-search
 parameters against labeled Sound Sleep minutes. Keep calibration code/test tooling separate from production

@@ -1,7 +1,12 @@
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from app.scores.sleep import HeartRateSample, Interval, SleepSessionFeatures, SleepStageInterval
-from app.scores.sleep_hr import sleep_hr_epochs
+from app.scores.sleep_hr import (
+    SoundSleepParameters,
+    sleep_hr_epochs,
+    sound_calibration_mae,
+    sound_sleep_candidate,
+)
 
 
 def sample_session():
@@ -47,3 +52,28 @@ def test_epoch_partial_boundary_and_unknown_awakening_state():
     assert [epoch.minutes for epoch in epochs] == [0.5, 1]
     assert epochs[0].minute_hr == 65
     assert epochs[0].is_short_awakening is None
+
+
+def test_sound_candidates_require_explicit_parameters_and_complete_data():
+    session = sample_session()
+    start = session.start_time
+    samples = tuple(
+        HeartRateSample(start + timedelta(minutes=minute, seconds=second), bpm)
+        for minute, bpm in enumerate((60, 61))
+        for second in range(10)
+    )
+    session = replace(
+        session,
+        stages=(SleepStageInterval(start, session.end_time, "light"),),
+        short_awakenings=(),
+        heart_rate_samples=samples,
+    )
+    epochs = sleep_hr_epochs(session)
+    robust = SoundSleepParameters("robust", 1, 2)
+    percentile = SoundSleepParameters("percentile", 100, 2)
+    assert sound_sleep_candidate(epochs, robust).minutes == 2
+    assert sound_sleep_candidate(epochs, percentile).minutes == 2
+    assert sound_calibration_mae(((epochs, 1.0),), robust) == 1
+    incomplete = replace(session, short_awakenings=None)
+    result = sound_sleep_candidate(sleep_hr_epochs(incomplete), robust)
+    assert result.minutes is None and result.unknown_minutes == 2
