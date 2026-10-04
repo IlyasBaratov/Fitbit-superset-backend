@@ -751,6 +751,8 @@ summary seconds equal the interval sums on each of the seven dates, including
 Sep 27–29, whose previous summaries lacked the totals. Oct 4 stores 437 minutes
 asleep, 482 minutes in bed and 960 short-awakening seconds; its stage rows are
 available for interruption derivation.
+Follow-up: null or malformed short-awakening arrays do not create zero totals
+or partial interval series; those inputs remain unavailable.
 
 Ensure `Sleep Summary` / `Sleep Levels` retain session ID, start/end, stage durations, short-awakening count and
 seconds/intervals. Prefer exact interval data over only summary counts.

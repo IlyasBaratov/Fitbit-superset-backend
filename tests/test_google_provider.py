@@ -98,3 +98,23 @@ def test_sleep_mapper_does_not_turn_missing_summary_fields_into_zero(monkeypatch
     assert "shortAwakeningSeconds" not in summary.fields
     assert "minutesAwake" not in summary.fields
     assert not any(p.measurement == "Sleep Short Awakenings" for p in points)
+
+
+def test_null_or_invalid_short_awakening_payload_is_unavailable(monkeypatch):
+    api, client = provider(monkeypatch)
+    start = "2026-08-20T05:00:00Z"
+    sleep = {
+        "interval": {"startTime": start, "endTime": "2026-08-20T06:00:00Z"},
+        "summary": {"minutesAsleep": 50},
+        "shortAwakenings": None,
+    }
+    client.get_google_datapoints_for_date_range.return_value = [({
+        "name": "users/me/dataTypes/sleep/dataPoints/session", "sleep": sleep,
+    }, start)]
+    for raw_awakenings in (None, [{"startTime": start}]):
+        sleep["shortAwakenings"] = raw_awakenings
+        points = api.fetch_daily_group("100d", "2026-08-20", "2026-08-20")
+        summary = next(p for p in points if p.measurement == "Sleep Summary")
+        assert "shortAwakeningSeconds" not in summary.fields
+        assert "shortAwakeningCount" not in summary.fields
+        assert not any(p.measurement == "Sleep Short Awakenings" for p in points)

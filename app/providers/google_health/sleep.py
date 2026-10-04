@@ -54,7 +54,8 @@ def map_sleep(
         )
         metadata = sleep.get("metadata") or {}
         is_main_sleep = str(bool(metadata.get("mainSleep", True))).lower()
-        short_awakenings = sleep.get("shortAwakenings") or []
+        raw_awakenings = sleep.get("shortAwakenings")
+        short_awakenings = raw_awakenings if isinstance(raw_awakenings, list) else []
         short_awake_seconds = 0
         valid_awakenings = []
         for awakening in short_awakenings:
@@ -72,6 +73,7 @@ def map_sleep(
                 valid_awakenings.append((beginning, ending, duration))
             except (KeyError, TypeError, ValueError):
                 continue
+        complete_awakenings = isinstance(raw_awakenings, list) and len(valid_awakenings) == len(raw_awakenings)
         sleep_session_id = stable_resource_id(data_point.get("name"))
         interval = sleep.get("interval", {})
         start_time_str = interval.get("startTime") or ts
@@ -98,9 +100,10 @@ def map_sleep(
                                 "shortAwakeningCount": len(valid_awakenings),
                                 "shortAwakeningSeconds": short_awake_seconds,
                             }
-                            if "shortAwakenings" in sleep
+                            if complete_awakenings
                             else {
-                                "shortAwakeningSeconds": summary.get("shortAwakeningSeconds")
+                                "shortAwakeningCount": summary.get("shortAwakeningCount"),
+                                "shortAwakeningSeconds": summary.get("shortAwakeningSeconds"),
                             }
                         ),
                         "startTime": start_time_str,
@@ -111,7 +114,7 @@ def map_sleep(
             }
         )
         inserted_count += 1
-        for beginning, ending, duration in valid_awakenings:
+        for beginning, ending, duration in (valid_awakenings if complete_awakenings else ()):
             records.append(
                 {
                     "measurement": "Sleep Short Awakenings",
