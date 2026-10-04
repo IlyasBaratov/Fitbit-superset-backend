@@ -737,6 +737,10 @@ The seven labeled sleep windows contain 8,553–12,824 raw `HeartRate_Intraday` 
 typically 23–25 samples per minute. The new identity-scoped read is limited to one 24-hour
 window and 20,000 rows without `GROUP BY`; the existing hourly public read is unchanged.
 Retention on any separate deployment remains to be checked there.
+Follow-up 2026-10-04: the Google collector now rejects incomplete paginated
+sleep and heart-rate source windows instead of persisting an unmarked partial
+page sequence. Scheduled collection retries the window on its next run; an
+outage beyond the automatic lookback still needs manual backfill.
 
 **Work**
 1. Inspect real Influx rows for `HeartRate_Intraday` during a known sleep interval.
@@ -760,6 +764,10 @@ asleep, 482 minutes in bed and 960 short-awakening seconds; its stage rows are
 available for interruption derivation.
 Follow-up: null or malformed short-awakening arrays do not create zero totals
 or partial interval series; those inputs remain unavailable.
+An overnight ingestion contract test follows a Google sleep session and its
+short-awakening interval plus HR samples from both local dates through the
+provider and Influx write preparation. All retain their original timestamps,
+session identity and raw `HeartRate_Intraday` measurement.
 
 Ensure `Sleep Summary` / `Sleep Levels` retain session ID, start/end, stage durations, short-awakening count and
 seconds/intervals. Prefer exact interval data over only summary counts.

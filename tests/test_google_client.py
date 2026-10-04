@@ -2,7 +2,9 @@ from dataclasses import replace
 from unittest.mock import Mock
 import pytz
 import requests
+import pytest
 from app.core.config import WorkerSettings
+from app.core.exceptions import ProviderUnavailableError
 from app.providers.google_health.client import GoogleHealthClient
 
 
@@ -35,10 +37,32 @@ def test_filter_fallback_and_local_date(monkeypatch):
     assert "filter" not in transport.request.call_args.kwargs["params"]
 
 
-def test_partial_page_failure_preserves_available_rows(monkeypatch):
+@pytest.mark.parametrize("kind", ["heart-rate", "sleep"])
+def test_partial_sleep_source_page_is_unavailable_instead_of_partial(monkeypatch, kind):
     api, transport = client(monkeypatch)
     transport.request.side_effect = [{"dataPoints": [point("2026-08-20T12:00:00Z")], "nextPageToken": "next"}, requests.HTTPError(response=Mock(status_code=500))]
-    assert len(api.get_google_datapoints_for_date("heart-rate", "2026-08-20")) == 1
+    with pytest.raises(ProviderUnavailableError, match="Incomplete"):
+        api.get_google_datapoints_for_date(kind, "2026-08-20")
+    assert transport.request.call_count == 2
+
+
+def test_sleep_source_rejects_repeated_page_token(monkeypatch):
+    api, transport = client(monkeypatch)
+    transport.request.side_effect = [
+        {"dataPoints": [point("2026-08-20T12:00:00Z")], "nextPageToken": "same"},
+        {"dataPoints": [point("2026-08-20T12:00:02Z")], "nextPageToken": "same"},
+    ]
+    with pytest.raises(ProviderUnavailableError, match="Repeated"):
+        api.get_google_datapoints_for_date("heart-rate", "2026-08-20")
+
+
+def test_non_sleep_source_keeps_partial_page_for_existing_behavior(monkeypatch):
+    api, transport = client(monkeypatch)
+    transport.request.side_effect = [
+        {"dataPoints": [{"steps": {"interval": {"startTime": "2026-08-20T12:00:00Z"}, "count": 1}}], "nextPageToken": "next"},
+        requests.HTTPError(response=Mock(status_code=500)),
+    ]
+    assert len(api.get_google_datapoints_for_date("steps", "2026-08-20")) == 1
 
 
 def test_ecg_session_range_uses_supported_lower_bound_and_paginates(monkeypatch):

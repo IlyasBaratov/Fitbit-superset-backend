@@ -69,6 +69,20 @@ Missing minute HR, stage or awakening data yields `null` with
 response includes eligible, unknown, HR-covered and HR-sparse minute counts,
 but no raw HR samples. The existing `/api/health/heart-rate` route remains hourly.
 
+For future Google Health nights, the collector stores each supplied
+`shortAwakenings[]` interval in `Sleep Short Awakenings` with its session ID and
+original start/end times. It stores each `heart-rate` sample at its actual
+timestamp in `HeartRate_Intraday`; the score service reads those raw samples
+internally for a bounded sleep window. The collector refreshes current-day HR
+every three minutes, previous-day HR hourly, and the rolling sleep group every
+four hours. Sleep and HR pagination must complete before their points are
+written; an interrupted source window is retried on a later scheduled run.
+The local InfluxDB `autogen` policy currently retains raw points without an
+expiry. Other deployments must retain raw HR for the sleep-score history they
+serve. Google Health may omit intervals or HR samples, and outages beyond the
+automatic lookback require a historical backfill; missing inputs remain
+unavailable rather than being inferred.
+
 If duration, TTS, restlessness or interruptions cannot be derived, `score` and
 `raw_score` are null, `insufficient_data` is true, `confidence` is `insufficient`,
 and a `missing_*` flag explains why. Missing data is never zero. With all score
