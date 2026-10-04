@@ -262,6 +262,8 @@ python -m pip install -r requirements-dev.txt
 python -m pytest
 ```
 
+CI runs the same command on Python 3.10 and 3.14 for every push to `main` and every pull request.
+
 ## Troubleshooting
 
 - **No API data:** confirm the requested dates contain synced device data and

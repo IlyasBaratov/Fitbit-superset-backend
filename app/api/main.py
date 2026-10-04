@@ -14,6 +14,9 @@ from app.api.calendar_connect import CalendarConnectService
 from app.api.calendar_service import CalendarReadService
 from app.api.health_service import HealthReadService
 
+# The contract version: info.version of /openapi.json (see docs/AI_BACKEND.md, "API usage").
+API_VERSION = "1.0.0"
+
 
 def create_app(settings=None, influx=None, gemini=None, clock=None):
     @asynccontextmanager
@@ -46,7 +49,7 @@ def create_app(settings=None, influx=None, gemini=None, clock=None):
             app.state.calendar_connect = connect
             yield
 
-    app = FastAPI(title="Wearable AI API", lifespan=lifespan)
+    app = FastAPI(title="Wearable AI API", version=API_VERSION, lifespan=lifespan)
 
     @app.exception_handler(APIError)
     async def error_handler(request, exc):
