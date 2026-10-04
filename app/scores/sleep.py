@@ -184,3 +184,57 @@ def normalize_sleep_days(
         )
         result[wake_date] = SleepDaySelection(wake_date, session, tuple(flags))
     return result
+
+
+ASLEEP_STAGES = frozenset({"light", "deep", "rem"})
+
+
+def sleep_efficiency_percent(session: SleepSessionFeatures) -> float | None:
+    if (
+        session.minutes_asleep is None
+        or session.minutes_in_bed is None
+        or session.minutes_in_bed <= 0
+        or session.minutes_asleep < 0
+    ):
+        return None
+    return 100 * session.minutes_asleep / session.minutes_in_bed
+
+
+def restlessness_minutes(session: SleepSessionFeatures) -> float | None:
+    seconds = session.short_awakening_seconds
+    intervals = session.short_awakenings
+    if seconds is not None:
+        if seconds < 0:
+            return None
+        if intervals is not None and abs(sum(item.seconds for item in intervals) - seconds) > 1:
+            return None
+        return seconds / 60
+    if intervals is not None:
+        return sum(item.seconds for item in intervals) / 60
+    return None
+
+
+def long_internal_awake_bouts(
+    session: SleepSessionFeatures,
+) -> tuple[SleepStageInterval, ...] | None:
+    asleep = [item for item in session.stages if item.stage in ASLEEP_STAGES]
+    if not asleep:
+        return None
+    return tuple(
+        item
+        for item in session.stages
+        if item.stage == "awake"
+        and item.seconds > 5 * 60
+        and any(sleep.end <= item.start for sleep in asleep)
+        and any(sleep.start >= item.end for sleep in asleep)
+    )
+
+
+def interruption_minutes(session: SleepSessionFeatures) -> float | None:
+    bouts = long_internal_awake_bouts(session)
+    return None if bouts is None else sum(item.seconds for item in bouts) / 60
+
+
+def full_awakenings_count(session: SleepSessionFeatures) -> int | None:
+    bouts = long_internal_awake_bouts(session)
+    return None if bouts is None else len(bouts)

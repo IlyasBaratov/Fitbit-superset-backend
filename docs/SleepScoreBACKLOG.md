@@ -36,7 +36,7 @@ goal must be configuration/profile inputs rather than permanent constants in the
 - [x] S1 Verify raw heart-rate retention and add a raw sleep-window query
 - [x] S2 Persist all sleep inputs needed by the score engine
 - [x] S3 Build the sleep-session normalization model
-- [ ] S4 Implement exact sleep efficiency, restlessness, interruptions and full awakenings
+- [x] S4 Implement exact sleep efficiency, restlessness, interruptions and full awakenings
 - [ ] S5 Implement Time to Sound Sleep v1
 - [ ] S6 Implement high-resolution sleep-HR epoch generation
 - [ ] S7 Implement and calibrate Sound Sleep v1
@@ -764,6 +764,13 @@ short-awakening intervals, and raw HR samples. Resolve all timestamps to aware U
 local timezone only to assign the wake date.
 
 ### S4 · Implement exact sleep efficiency, restlessness, interruptions and full awakenings
+
+Completed 2026-10-04: pure functions calculate efficiency from asleep/in-bed
+minutes, restlessness from stored seconds or exact interval sums, and
+interruptions/full awakenings from strictly greater-than-five-minute internal
+awake bouts. Missing inputs return unavailable; leading and trailing awake time
+is excluded. Overlapping short-awakening intervals follow the documented sum
+of durations, not a union of time ranges.
 
 Implement the formulas in this file as pure functions. Include boundary tests for exactly 5:00 awake vs
 5:01 awake, leading/trailing wake, and overlapping short awakenings.
