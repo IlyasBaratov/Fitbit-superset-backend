@@ -35,7 +35,7 @@ goal must be configuration/profile inputs rather than permanent constants in the
 
 - [x] S1 Verify raw heart-rate retention and add a raw sleep-window query
 - [x] S2 Persist all sleep inputs needed by the score engine
-- [ ] S3 Build the sleep-session normalization model
+- [x] S3 Build the sleep-session normalization model
 - [ ] S4 Implement exact sleep efficiency, restlessness, interruptions and full awakenings
 - [ ] S5 Implement Time to Sound Sleep v1
 - [ ] S6 Implement high-resolution sleep-HR epoch generation
@@ -752,6 +752,12 @@ seconds/intervals. Prefer exact interval data over only summary counts.
 482 in bed, 16 min restlessness, 33 min interruption, 1 full awakening.
 
 ### S3 · Build the sleep-session normalization model
+
+Completed 2026-10-04: provider-independent immutable interval, stage, HR sample,
+session and day-selection models normalize aware timestamps to UTC. Main sessions
+are grouped by configured local wake date; multiple main candidates prefer a
+processed session and then the longest duration, with a diagnostic flag. Missing
+short-awakening intervals remain unavailable rather than becoming an empty list.
 
 Create provider-independent dataclasses/Pydantic-internal models for main session, stage intervals,
 short-awakening intervals, and raw HR samples. Resolve all timestamps to aware UTC datetimes; use configured
