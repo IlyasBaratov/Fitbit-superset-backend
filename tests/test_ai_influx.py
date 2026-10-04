@@ -25,6 +25,41 @@ def test_intraday_aggregates_before_transfer(service):
     sql = service.client.query.call_args.args[0]
     assert 'COUNT("value")' in sql and 'GROUP BY time(1h)' in sql
 
+
+def test_short_awakening_read_preserves_session_and_main_sleep_tag(service):
+    end = datetime.now(timezone.utc)
+    service.query("Sleep Short Awakenings", end-timedelta(days=1), end)
+    sql = service.client.query.call_args.args[0]
+    assert '"SleepSessionId"' in sql
+    assert '"duration_seconds"' in sql
+    assert '"isMainSleep"' in sql
+    assert "GROUP BY" not in sql
+
+
+def test_raw_sleep_hr_is_bounded_identity_scoped_and_not_aggregated(service):
+    end = datetime.now(timezone.utc)
+    service.client.query.return_value.get_points.return_value = iter([
+        {"time": "2026-10-04T09:00:00Z", "value": 60},
+        {"time": "2026-10-04T09:00:02Z", "value": 61},
+    ])
+    rows = service.query_raw_sleep_heart_rate(end-timedelta(hours=8), end)
+    assert len(rows) == 2
+    sql = service.client.query.call_args.args[0]
+    assert 'SELECT "value" FROM "HeartRate_Intraday"' in sql
+    assert '"UserId" = ' in sql and '"Provider" = ' in sql and '"DeviceId" = ' in sql
+    assert 'GROUP BY' not in sql and 'LIMIT 20001' in sql
+    with pytest.raises(ValueError):
+        service.query_raw_sleep_heart_rate(end-timedelta(days=2), end)
+    with pytest.raises(ValueError):
+        service.query_raw_sleep_heart_rate(end, end)
+
+
+def test_raw_sleep_hr_rejects_oversized_result(service):
+    end = datetime.now(timezone.utc)
+    service.client.query.return_value.get_points.return_value = iter([{}] * 20001)
+    with pytest.raises(DataUnavailable, match="safe query limit"):
+        service.query_raw_sleep_heart_rate(end-timedelta(hours=8), end)
+
 @pytest.mark.parametrize("measurement,days", [("anything", 7), ("GPS", 7), ("Total Steps", 191), ("Total Steps", 0)])
 def test_rejects_unbounded_or_unapproved_queries(service, measurement, days):
     end = datetime.now(timezone.utc)

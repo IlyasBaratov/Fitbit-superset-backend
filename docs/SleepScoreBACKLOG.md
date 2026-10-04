@@ -33,17 +33,17 @@ goal must be configuration/profile inputs rather than permanent constants in the
 
 ## Status
 
-- [ ] S1 Verify raw heart-rate retention and add a raw sleep-window query
-- [ ] S2 Persist all sleep inputs needed by the score engine
-- [ ] S3 Build the sleep-session normalization model
-- [ ] S4 Implement exact sleep efficiency, restlessness, interruptions and full awakenings
-- [ ] S5 Implement Time to Sound Sleep v1
-- [ ] S6 Implement high-resolution sleep-HR epoch generation
+- [x] S1 Verify raw heart-rate retention and add a raw sleep-window query
+- [x] S2 Persist all sleep inputs needed by the score engine
+- [x] S3 Build the sleep-session normalization model
+- [x] S4 Implement exact sleep efficiency, restlessness, interruptions and full awakenings
+- [x] S5 Implement Time to Sound Sleep v1
+- [x] S6 Implement high-resolution sleep-HR epoch generation
 - [ ] S7 Implement and calibrate Sound Sleep v1
-- [ ] S8 Implement Sleep Score Emulator v0.1
-- [ ] S9 Add versioned sleep-score schemas and endpoint
-- [ ] S10 Add unit, calibration and route tests
-- [ ] S11 Document caveats, confidence and missing-data behavior
+- [x] S8 Implement Sleep Score Emulator v0.1
+- [x] S9 Add versioned sleep-score schemas and endpoint
+- [x] S10 Add unit, calibration and route tests
+- [x] S11 Document caveats, confidence and missing-data behavior
 - [ ] S12 Collect more Google-labeled nights and calibrate v0.2
 
 ---
@@ -115,6 +115,13 @@ Reference material used while designing this backlog:
 ---
 
 ## Calibration data currently available
+
+Owner clarification (2026-10-04): of the values listed below, only the seven
+`Google score` values are ground-truth targets for model fitting. TTS, Sound
+Sleep, restlessness, interruptions and full awakenings are contextual display
+observations, not public Google Health API fields or fitting targets. Production
+components must be derived from raw API records; the display values must never
+be written back as measurements or substituted for missing raw data.
 
 Sep 30 has a Google Sleep Score but no corresponding raw sleep session in the exported dataset. **Exclude
 Sep 30 from model fitting. Do not convert missing telemetry into zero sleep.** Missing data and zero are
@@ -718,6 +725,12 @@ Do not add Gemini as a dependency of this endpoint.
 
 ### S1 · Verify raw heart-rate retention and add a raw sleep-window query
 
+Completed 2026-10-04: the running local InfluxDB 1.x has an unlimited `autogen` retention policy.
+The seven labeled sleep windows contain 8,553–12,824 raw `HeartRate_Intraday` samples each,
+typically 23–25 samples per minute. The new identity-scoped read is limited to one 24-hour
+window and 20,000 rows without `GROUP BY`; the existing hourly public read is unchanged.
+Retention on any separate deployment remains to be checked there.
+
 **Work**
 1. Inspect real Influx rows for `HeartRate_Intraday` during a known sleep interval.
 2. Confirm whether second/sub-minute timestamps are retained before the hourly API aggregation.
@@ -730,6 +743,17 @@ and the normal heart-rate endpoint still returns its existing aggregated shape.
 
 ### S2 · Persist all sleep inputs needed by the score engine
 
+Completed 2026-10-04: `Sleep Short Awakenings` now stores exact interval starts,
+ends and durations with session IDs. Missing summary fields remain absent rather
+than becoming zero. The owner-approved historical Google Health backfill recovered
+all seven labeled sessions and wrote 68 real short-awakening intervals. Stored
+summary seconds equal the interval sums on each of the seven dates, including
+Sep 27–29, whose previous summaries lacked the totals. Oct 4 stores 437 minutes
+asleep, 482 minutes in bed and 960 short-awakening seconds; its stage rows are
+available for interruption derivation.
+Follow-up: null or malformed short-awakening arrays do not create zero totals
+or partial interval series; those inputs remain unavailable.
+
 Ensure `Sleep Summary` / `Sleep Levels` retain session ID, start/end, stage durations, short-awakening count and
 seconds/intervals. Prefer exact interval data over only summary counts.
 
@@ -738,26 +762,63 @@ seconds/intervals. Prefer exact interval data over only summary counts.
 
 ### S3 · Build the sleep-session normalization model
 
+Completed 2026-10-04: provider-independent immutable interval, stage, HR sample,
+session and day-selection models normalize aware timestamps to UTC. Main sessions
+are grouped by configured local wake date; multiple main candidates prefer a
+processed session and then the longest duration, with a diagnostic flag. Missing
+short-awakening intervals remain unavailable rather than becoming an empty list.
+
 Create provider-independent dataclasses/Pydantic-internal models for main session, stage intervals,
 short-awakening intervals, and raw HR samples. Resolve all timestamps to aware UTC datetimes; use configured
 local timezone only to assign the wake date.
 
 ### S4 · Implement exact sleep efficiency, restlessness, interruptions and full awakenings
 
+Completed 2026-10-04: pure functions calculate efficiency from asleep/in-bed
+minutes, restlessness from stored seconds or exact interval sums, and
+interruptions/full awakenings from strictly greater-than-five-minute internal
+awake bouts. Missing inputs return unavailable; leading and trailing awake time
+is excluded. Overlapping short-awakening intervals follow the documented sum
+of durations, not a union of time ranges.
+
 Implement the formulas in this file as pure functions. Include boundary tests for exactly 5:00 awake vs
 5:01 awake, leading/trailing wake, and overlapping short awakenings.
 
 ### S5 · Implement Time to Sound Sleep v1
+
+Completed 2026-10-04: the pure candidate selector takes the earliest first Deep,
+first REM or qualified Stable Light start. Stable Light requires a continuous
+20-minute Light bout and a separately supplied HR qualifier. Until the HR rule
+is validated, Deep/REM selection carries an explicit approximation flag.
+Recomputing from the seven stored stage series gives first-Deep offsets of
+16, 13, 14, 19, 23, 20 and 26 minutes, respectively; these are derived
+stage values, not Google API score labels.
 
 Implement first Deep, first REM, and provisional stable-Light candidates. For the known seven labeled nights,
 first-Deep path must reproduce `16,13,14,19,23,20,26`.
 
 ### S6 · Implement high-resolution sleep-HR epoch generation
 
+Completed 2026-10-04: pure one-minute UTC epochs use medians of valid raw BPM
+samples within the session. Each epoch carries sample count, stage, short-wake
+and long-interruption state; unknown wake state remains unknown. Partial session
+boundary minutes retain their exact overlap duration. The provisional quality
+cutoff is 10 HR samples per minute, based on the measured 20–25/minute cadence
+on the seven owner nights; sparse minutes have unknown HR. This cutoff is not
+a low/steady-HR classifier threshold.
+
 Join raw HR samples to the sleep interval, aggregate robustly to minute medians, assign stage/awakening flags,
 and expose data-quality counts.
 
 ### S7 · Implement and calibrate Sound Sleep v1
+
+Partially implemented 2026-10-04: pure robust-threshold and percentile low-HR
+candidates, rolling five-minute MAD stability, and a research-only MAE helper
+accept explicit parameters and independently verified Sound Sleep targets.
+No low/steady-HR parameters have been fitted or enabled in production: the
+seven approved fitting targets contain only final Sleep Score labels, and
+v0.1 has no independently identifiable Sound Sleep weight. Sound Sleep and
+HR-qualified Stable Light remain unavailable until suitable evidence exists.
 
 Implement both robust-threshold and percentile low-HR candidates plus rolling-MAD stability. Grid-search
 parameters against labeled Sound Sleep minutes. Keep calibration code/test tooling separate from production
@@ -765,15 +826,39 @@ runtime constants.
 
 ### S8 · Implement Sleep Score Emulator v0.1
 
+Completed 2026-10-04: the pure `sleep-score-emulator-v0.1` scorer applies the
+four published coefficients to derived duration shortfall, TTS, restlessness
+and internal interruption minutes. Score is clamped to 0–100, with nearest
+integer public score and unrounded internal value. Sound Sleep, full awakenings
+and efficiency are reported without added v0.1 weights. Missing required
+features yield null score and explicit flags.
+
 Implement the current four-term formula and explicit formula version. Return raw components even when a
 component has no v0.1 weight.
 
 ### S9 · Add versioned sleep-score schemas and endpoint
 
+Completed 2026-10-04: authenticated `GET /api/health/sleep-score?period=Nd`
+uses the existing bounded period resolver, one main session per local wake
+date, and the same server-controlled identity-scoped storage. The response
+includes version, raw components, methods, flags, confidence and caveats;
+raw second-level HR never leaves the service. Absent required sleep inputs
+produce null scores and explanatory flags.
+
 Add `GET /api/health/sleep-score?period=Nd`, auth, bounded period, response version, components, flags,
 confidence and caveats. No LLM call.
 
 ### S10 · Add unit, calibration and route tests
+
+Completed 2026-10-04: the owner-approved fixture stores only the seven real
+Google Health app `sleep_score` values as fitting targets. Other fixture
+values were derived from actual API sleep summaries, stages and recovered
+short awakenings; Sep 30 is excluded. Unit and route tests cover exact
+formulas, missing inputs, auth/period bounds, HR fallback, no raw-HR exposure
+and no Gemini call. Against these same seven fitting nights, raw v0.1 score
+error is MAE 1.322, median absolute error 1.184, maximum absolute error
+2.836 and signed mean error +0.174 points. This is in-sample fitting error,
+not validated accuracy.
 
 Minimum tests:
 - efficiency 437/482 -> 90.66%;
@@ -788,6 +873,13 @@ Minimum tests:
 - endpoint never calls Gemini.
 
 ### S11 · Document caveats, confidence and missing-data behavior
+
+Completed 2026-10-04: `docs/HEALTH_API.md` documents the v0.1 formula,
+configuration, response fields, confidence labels, missing-data rules,
+unweighted components and in-sample calibration errors. Google-proprietary
+thresholds and weights remain unknown. S7 calibration and S12 collection
+remain open; later real labeled nights must support independent Sound Sleep
+and Stable Light validation plus a held-out score evaluation.
 
 Put formulas and constants in API docs. State clearly that the score is experimental, user-specific calibration
 is small, Google internals are proprietary, and changes require a new model version.

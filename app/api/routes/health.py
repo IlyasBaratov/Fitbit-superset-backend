@@ -3,9 +3,10 @@
 from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Request
 from app.core.security import authenticate
-from app.api.dependencies import get_health
+from app.api.dependencies import get_health, get_sleep_score
 from app.api.health_service import HEALTH_MEASUREMENTS
 from app.api.schemas.health import HealthQuery, HealthResponse, DevicesResponse
+from app.api.schemas.scores import SleepScoreResponse
 from app.errors import APIError
 
 router = APIRouter()
@@ -30,6 +31,15 @@ for category in HEALTH_MEASUREMENTS:
         methods=["GET"],
         response_model=HealthResponse,
     )
+
+
+@router.get("/api/health/sleep-score", response_model=SleepScoreResponse)
+def sleep_score(
+    query: Annotated[HealthQuery, Query()],
+    user=Depends(authenticate),
+    service=Depends(get_sleep_score),
+):
+    return service.read(query.period)
 
 
 @router.get("/api/devices", response_model=DevicesResponse)

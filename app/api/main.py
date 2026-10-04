@@ -13,6 +13,7 @@ from app.api.routes import ai, system, health, calendar
 from app.api.calendar_connect import CalendarConnectService
 from app.api.calendar_service import CalendarReadService
 from app.api.health_service import HealthReadService
+from app.api.sleep_score_service import SleepScoreReadService
 
 
 def create_app(settings=None, influx=None, gemini=None, clock=None):
@@ -41,6 +42,7 @@ def create_app(settings=None, influx=None, gemini=None, clock=None):
             app.state.calendar = CalendarReadService(cfg, db, clock)
             app.state.analysis = AnalysisService(cfg, db, llm, clock, app.state.calendar)
             app.state.health = HealthReadService(cfg, db, clock)
+            app.state.sleep_score = SleepScoreReadService(cfg, db, clock)
             connect = CalendarConnectService(cfg, clock=clock)
             resources.callback(connect.close)
             app.state.calendar_connect = connect

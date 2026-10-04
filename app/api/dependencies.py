@@ -15,5 +15,9 @@ def get_health(request: Request):
     return request.app.state.health
 
 
+def get_sleep_score(request: Request):
+    return request.app.state.sleep_score
+
+
 def get_calendar(request: Request):
     return request.app.state.calendar

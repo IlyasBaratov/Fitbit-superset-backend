@@ -70,7 +70,7 @@ class InfluxService:
             names = list(FIELD_TYPES[measurement])
             if measurement == "Activity Records":
                 names.append("ActivityName")
-            if measurement in {"Sleep Summary", "Sleep Levels"}:
+            if measurement in {"Sleep Summary", "Sleep Levels", "Sleep Short Awakenings"}:
                 names.append("isMainSleep")
             if measurement == CALENDAR:
                 names.extend(CALENDAR_TAGS)
@@ -84,6 +84,30 @@ class InfluxService:
         if len(rows) > MAX_ROWS:
             raise QueryLimitExceeded(
                 "Requested data exceeds the safe query limit; use a shorter period."
+            )
+        return rows
+
+    def query_raw_sleep_heart_rate(self, start, end):
+        """Read stored HR timestamps for one sleep session, without hourly aggregation."""
+        if (
+            start.tzinfo is None
+            or end.tzinfo is None
+            or not timedelta(0) < end - start <= timedelta(days=1)
+        ):
+            raise ValueError("Invalid sleep heart-rate interval")
+        where = self._identity("HeartRate_Intraday")
+        where += f" AND time >= {literal(start.astimezone(timezone.utc).isoformat())} AND time < {literal(end.astimezone(timezone.utc).isoformat())}"
+        sql = (
+            'SELECT "value" FROM "HeartRate_Intraday" '
+            f"WHERE {where} ORDER BY time ASC LIMIT {MAX_ROWS + 1}"
+        )
+        try:
+            rows = list(self.client.query(sql).get_points())
+        except Exception:
+            raise DataUnavailable("Sleep heart-rate data could not be retrieved.") from None
+        if len(rows) > MAX_ROWS:
+            raise QueryLimitExceeded(
+                "Sleep heart-rate data exceeds the safe query limit."
             )
         return rows
 

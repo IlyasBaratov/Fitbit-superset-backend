@@ -32,21 +32,32 @@ def map_sleep(
             continue
         summary = sleep.get("summary", {})
         stages_summary = summary.get("stagesSummary", [])
-        stages_map = {s["type"]: int(s.get("minutes", 0)) for s in stages_summary}
-        minutes_asleep = int(summary.get("minutesAsleep", 0))
-        minutes_awake = int(summary.get("minutesAwake", 0))
-        minutes_in_period = int(summary.get("minutesInSleepPeriod", 0))
-        minutes_after_wakeup = int(summary.get("minutesAfterWakeUp", 0))
-        minutes_to_fall = int(summary.get("minutesToFallAsleep", 0))
-        minutes_light = stages_map.get("LIGHT", 0)
-        minutes_rem = stages_map.get("REM", 0)
-        minutes_deep = stages_map.get("DEEP", 0)
+        stages_map = {
+            s["type"]: int(s["minutes"])
+            for s in stages_summary
+            if s.get("type") and s.get("minutes") is not None
+        }
+        def optional_minutes(name):
+            value = summary.get(name)
+            return int(value) if value is not None else None
+
+        minutes_asleep = optional_minutes("minutesAsleep")
+        minutes_awake = optional_minutes("minutesAwake")
+        minutes_in_period = optional_minutes("minutesInSleepPeriod")
+        minutes_after_wakeup = optional_minutes("minutesAfterWakeUp")
+        minutes_to_fall = optional_minutes("minutesToFallAsleep")
+        minutes_light = stages_map.get("LIGHT")
+        minutes_rem = stages_map.get("REM")
+        minutes_deep = stages_map.get("DEEP")
         efficiency = sleep_efficiency(
             minutes_asleep, minutes_in_period, summary.get("efficiency")
         )
-        is_main_sleep = str(bool(sleep.get("metadata", {}).get("mainSleep", True))).lower()
-        short_awakenings = sleep.get("shortAwakenings") or []
+        metadata = sleep.get("metadata") or {}
+        is_main_sleep = str(bool(metadata.get("mainSleep", True))).lower()
+        raw_awakenings = sleep.get("shortAwakenings")
+        short_awakenings = raw_awakenings if isinstance(raw_awakenings, list) else []
         short_awake_seconds = 0
+        valid_awakenings = []
         for awakening in short_awakenings:
             try:
                 beginning = datetime.fromisoformat(
@@ -55,9 +66,14 @@ def map_sleep(
                 ending = datetime.fromisoformat(
                     awakening["endTime"].replace("Z", "+00:00")
                 )
-                short_awake_seconds += max(0, int((ending - beginning).total_seconds()))
+                duration = int((ending - beginning).total_seconds())
+                if beginning.tzinfo is None or ending.tzinfo is None or duration <= 0:
+                    continue
+                short_awake_seconds += duration
+                valid_awakenings.append((beginning, ending, duration))
             except (KeyError, TypeError, ValueError):
                 continue
+        complete_awakenings = isinstance(raw_awakenings, list) and len(valid_awakenings) == len(raw_awakenings)
         sleep_session_id = stable_resource_id(data_point.get("name"))
         interval = sleep.get("interval", {})
         start_time_str = interval.get("startTime") or ts
@@ -81,19 +97,36 @@ def map_sleep(
                         "minutesDeep": minutes_deep,
                         **(
                             {
-                                "shortAwakeningCount": len(short_awakenings),
+                                "shortAwakeningCount": len(valid_awakenings),
                                 "shortAwakeningSeconds": short_awake_seconds,
                             }
-                            if "shortAwakenings" in sleep
-                            else {}
+                            if complete_awakenings
+                            else {
+                                "shortAwakeningCount": summary.get("shortAwakeningCount"),
+                                "shortAwakeningSeconds": summary.get("shortAwakeningSeconds"),
+                            }
                         ),
                         "startTime": start_time_str,
                         "endTime": session_end_time_str,
+                        "isProcessed": metadata.get("processed"),
                     }
                 ),
             }
         )
         inserted_count += 1
+        for beginning, ending, duration in (valid_awakenings if complete_awakenings else ()):
+            records.append(
+                {
+                    "measurement": "Sleep Short Awakenings",
+                    "time": beginning.astimezone(pytz.utc).isoformat(),
+                    "tags": {"Device": device_name, "isMainSleep": is_main_sleep},
+                    "fields": {
+                        "SleepSessionId": sleep_session_id,
+                        "endTime": ending.astimezone(pytz.utc).isoformat(),
+                        "duration_seconds": duration,
+                    },
+                }
+            )
         for stage in sleep.get("stages", []):
             stage_time_str = stage.get("startTime")
             if not stage_time_str:
