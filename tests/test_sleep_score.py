@@ -2,6 +2,9 @@
 
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
+import json
+from pathlib import Path
+from statistics import mean, median
 import pytest
 from app.scores.sleep import (
     Interval,
@@ -14,6 +17,7 @@ from app.scores.sleep import (
     restlessness_minutes,
     sleep_efficiency_percent,
     score_sleep_session,
+    score_v01_raw,
     time_to_sound_sleep,
 )
 
@@ -139,3 +143,42 @@ def test_v01_oct4_score_and_missing_restlessness():
     missing = score_sleep_session(replace(session, short_awakening_seconds=None), time_to_sound_sleep(session))
     assert missing.score is None and missing.insufficient_data is True
     assert "missing_restlessness" in missing.flags
+
+
+def test_seven_real_owner_score_labels_against_api_derived_features():
+    fixture = json.loads(
+        (Path(__file__).parent / "fixtures" / "sleep_score_google_calibration.json")
+        .read_text(encoding="utf-8")
+    )
+    nights = fixture["nights"]
+    assert [night["wake_date"] for night in nights] == [
+        "2026-09-27", "2026-09-28", "2026-09-29", "2026-10-01",
+        "2026-10-02", "2026-10-03", "2026-10-04",
+    ]
+    assert [night["sleep_score"] for night in nights] == [87, 84, 80, 84, 82, 72, 77]
+    assert "2026-09-30" in fixture["excluded_wake_dates"]
+    predicted, errors = [], []
+    for night in nights:
+        raw = night["derived_from_raw_api"]
+        assert raw["restlessness_minutes"] == raw["short_awakening_seconds"] / 60
+        assert raw["sleep_efficiency_percent"] == pytest.approx(
+            100 * raw["minutes_asleep"] / raw["minutes_in_bed"]
+        )
+        value = score_v01_raw(
+            max(0, fixture["model_goal_minutes"] - raw["minutes_asleep"]),
+            raw["time_to_sound_sleep_minutes"], raw["restlessness_minutes"],
+            raw["interruption_minutes"],
+        )
+        predicted.append(value)
+        errors.append(value - night["sleep_score"])
+    assert predicted == pytest.approx([88.336, 85.922, 80.792, 83.218, 79.164, 71.6, 78.184])
+    assert mean(map(abs, errors)) == pytest.approx(1.3217142857)
+    assert median(map(abs, errors)) == pytest.approx(1.184)
+    assert max(map(abs, errors)) == pytest.approx(2.836)
+    assert mean(errors) == pytest.approx(0.1737142857)
+    oct4 = nights[-1]["derived_from_raw_api"]
+    assert oct4["minutes_asleep"] == 437 and oct4["minutes_in_bed"] == 482
+    assert oct4["short_awakening_seconds"] == 960
+    assert oct4["interruption_minutes"] == 33
+    assert oct4["full_awakenings_count"] == 1
+    assert oct4["time_to_sound_sleep_minutes"] == 26

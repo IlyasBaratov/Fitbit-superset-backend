@@ -42,7 +42,7 @@ goal must be configuration/profile inputs rather than permanent constants in the
 - [ ] S7 Implement and calibrate Sound Sleep v1
 - [x] S8 Implement Sleep Score Emulator v0.1
 - [x] S9 Add versioned sleep-score schemas and endpoint
-- [ ] S10 Add unit, calibration and route tests
+- [x] S10 Add unit, calibration and route tests
 - [ ] S11 Document caveats, confidence and missing-data behavior
 - [ ] S12 Collect more Google-labeled nights and calibrate v0.2
 
@@ -847,6 +847,16 @@ Add `GET /api/health/sleep-score?period=Nd`, auth, bounded period, response vers
 confidence and caveats. No LLM call.
 
 ### S10 · Add unit, calibration and route tests
+
+Completed 2026-10-04: the owner-approved fixture stores only the seven real
+Google Health app `sleep_score` values as fitting targets. Other fixture
+values were derived from actual API sleep summaries, stages and recovered
+short awakenings; Sep 30 is excluded. Unit and route tests cover exact
+formulas, missing inputs, auth/period bounds, HR fallback, no raw-HR exposure
+and no Gemini call. Against these same seven fitting nights, raw v0.1 score
+error is MAE 1.322, median absolute error 1.184, maximum absolute error
+2.836 and signed mean error +0.174 points. This is in-sample fitting error,
+not validated accuracy.
 
 Minimum tests:
 - efficiency 437/482 -> 90.66%;

@@ -301,6 +301,28 @@ def time_to_sound_sleep(
     return TimeToSoundSleep((start - session.start_time).total_seconds() / 60, method, flags)
 
 
+def score_v01_raw(
+    duration_shortfall_minutes: float,
+    time_to_sound_sleep_minutes: float,
+    restlessness_minutes_value: float,
+    interruption_minutes_value: float,
+) -> float:
+    """Fixed empirical formula; arguments must be derived sleep features."""
+    values = (
+        duration_shortfall_minutes, time_to_sound_sleep_minutes,
+        restlessness_minutes_value, interruption_minutes_value,
+    )
+    if any(not isfinite(value) or value < 0 for value in values):
+        raise ValueError("Sleep score inputs must be finite nonnegative values")
+    return max(0.0, min(100.0,
+        100
+        - DURATION_SHORTFALL_WEIGHT * duration_shortfall_minutes
+        - TIME_TO_SOUND_SLEEP_WEIGHT * time_to_sound_sleep_minutes
+        - RESTLESSNESS_WEIGHT * restlessness_minutes_value
+        - INTERRUPTION_WEIGHT * interruption_minutes_value,
+    ))
+
+
 def score_sleep_session(
     session: SleepSessionFeatures,
     tts: TimeToSoundSleep,
@@ -350,12 +372,11 @@ def score_sleep_session(
         ("restlessness", restless),
         ("interruptions", interruption),
     ):
-        if value is None or not isfinite(value):
+        if value is None or not isfinite(value) or value < 0:
             flags.append(f"missing_{name}")
     if any(flag.startswith("missing_") for flag in flags):
         return SleepScoreResult(None, None, True, "insufficient", components, tuple(flags))
-    raw = max(0.0, min(100.0, 100 - duration_penalty - tts_penalty
-                       - restlessness_penalty - interruption_penalty))
+    raw = score_v01_raw(shortfall, tts.minutes, restless, interruption)
     score = floor(raw + 0.5)
     confidence = "experimental_approximate" if "tts_approximation_no_hr" in flags else "experimental"
     return SleepScoreResult(raw, score, False, confidence, components, tuple(flags))
