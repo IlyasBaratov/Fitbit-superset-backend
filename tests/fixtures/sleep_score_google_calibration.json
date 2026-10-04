@@ -1,5 +1,5 @@
 {
-  "description": "Owner-provided real Google Health app Sleep Score labels; all other values derived from stored Google Health API sleep summaries, stages and short awakenings after 2026-10-04 backfill. No app component displays are fitting targets.",
+  "description": "Owner-provided real Google Health app observations. Final sleep_score labels fit the v0.1 score formula; observed_app_sound_sleep_minutes separately calibrates the experimental S7 HR classifier. All derived_from_raw_api values come from stored Google Health API records after the 2026-10-04 backfill. App component displays are not API fields and are never substituted for missing raw data.",
   "model_goal_minutes": 420,
   "raw_sources": [
     "Sleep Summary",
@@ -13,6 +13,7 @@
     {
       "wake_date": "2026-09-27",
       "sleep_score": 87,
+      "observed_app_sound_sleep_minutes": 179,
       "derived_from_raw_api": {
         "minutes_asleep": 464,
         "minutes_in_bed": 468,
@@ -29,6 +30,7 @@
     {
       "wake_date": "2026-09-28",
       "sleep_score": 84,
+      "observed_app_sound_sleep_minutes": 145,
       "derived_from_raw_api": {
         "minutes_asleep": 388,
         "minutes_in_bed": 395,
@@ -45,6 +47,7 @@
     {
       "wake_date": "2026-09-29",
       "sleep_score": 80,
+      "observed_app_sound_sleep_minutes": 152,
       "derived_from_raw_api": {
         "minutes_asleep": 361,
         "minutes_in_bed": 364,
@@ -61,6 +64,7 @@
     {
       "wake_date": "2026-10-01",
       "sleep_score": 84,
+      "observed_app_sound_sleep_minutes": 155,
       "derived_from_raw_api": {
         "minutes_asleep": 399,
         "minutes_in_bed": 407,
@@ -77,6 +81,7 @@
     {
       "wake_date": "2026-10-02",
       "sleep_score": 82,
+      "observed_app_sound_sleep_minutes": 142,
       "derived_from_raw_api": {
         "minutes_asleep": 389,
         "minutes_in_bed": 395,
@@ -93,6 +98,7 @@
     {
       "wake_date": "2026-10-03",
       "sleep_score": 72,
+      "observed_app_sound_sleep_minutes": 162,
       "derived_from_raw_api": {
         "minutes_asleep": 409,
         "minutes_in_bed": 510,
@@ -109,6 +115,7 @@
     {
       "wake_date": "2026-10-04",
       "sleep_score": 77,
+      "observed_app_sound_sleep_minutes": 159,
       "derived_from_raw_api": {
         "minutes_asleep": 437,
         "minutes_in_bed": 482,

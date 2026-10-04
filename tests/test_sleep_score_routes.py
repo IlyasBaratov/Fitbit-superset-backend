@@ -1,6 +1,6 @@
 """Public contract and read-path tests for experimental sleep scores."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 from fastapi.testclient import TestClient
 from app.api.main import create_app
@@ -76,4 +76,40 @@ def test_sleep_score_route_uses_derived_components_and_flags_missing_hr():
         missing = client.get("/api/health/sleep-score?period=1d", headers=headers).json()["days"][0]
         assert missing["score"] is None and missing["insufficient_data"] is True
         assert "missing_restlessness" in missing["flags"]
+    gemini.generate.assert_not_called()
+
+
+def test_sleep_score_route_calculates_experimental_sound_from_raw_hr():
+    cfg = Settings(api_token="s" * 40, gemini_key="test", model="test")
+    db, gemini = Mock(), Mock()
+    start = datetime(2026, 10, 4, 16, tzinfo=timezone.utc)
+    end = datetime(2026, 10, 4, 16, 3, tzinfo=timezone.utc)
+    summary = {
+        "time": start.isoformat(), "startTime": start.isoformat(),
+        "endTime": end.isoformat(), "SleepSessionId": "test",
+        "isMainSleep": "true", "isProcessed": True,
+        "minutesAsleep": 3, "minutesInBed": 3,
+        "shortAwakeningSeconds": 0, "shortAwakeningCount": 0,
+    }
+    stages = [{"time": start.isoformat(), "SleepSessionId": "test",
+               "stageName": "deep", "duration_seconds": 180}]
+    data = {"Sleep Summary": [summary], "Sleep Levels": stages,
+            "Sleep Short Awakenings": []}
+    db.query.side_effect = lambda measurement, *_: data.get(measurement, [])
+    db.query_raw_sleep_heart_rate.return_value = [
+        {"time": (start + timedelta(minutes=minute, seconds=second)).isoformat(),
+         "value": 60}
+        for minute in range(3) for second in range(10)
+    ]
+    clock = lambda: datetime(2026, 10, 4, 18, tzinfo=timezone.utc)
+    with TestClient(create_app(cfg, db, gemini, clock)) as client:
+        day = client.get(
+            "/api/health/sleep-score?period=1d",
+            headers={"Authorization": "Bearer " + cfg.api_token},
+        ).json()["days"][0]
+    assert day["components"]["sound_sleep"]["minutes"] == 3
+    assert day["components"]["sound_sleep"]["method"] == "sound-sleep-hr-v1-exp-2026-10-04"
+    assert day["components"]["sound_sleep"]["eligible_minutes"] == 3
+    assert "sound_sleep_experimental_in_sample" in day["flags"]
+    assert day["insufficient_data"] is False
     gemini.generate.assert_not_called()

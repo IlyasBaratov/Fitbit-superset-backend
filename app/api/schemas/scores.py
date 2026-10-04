@@ -17,6 +17,8 @@ class SleepScoreComponent(BaseModel):
     method: str | None = None
     hr_coverage_minutes: float | None = None
     hr_sparse_minutes: float | None = None
+    eligible_minutes: float | None = None
+    unknown_minutes: float | None = None
 
 
 class SleepScoreDay(BaseModel):

@@ -83,3 +83,23 @@ def test_jobs_recompute_dates_across_midnight():
     ingestion.sync_intraday.assert_called_with("2026-08-21")
     jobs.sync_previous_day()
     ingestion.sync_intraday.assert_called_with("2026-08-20")
+
+
+def test_startup_sync_includes_both_local_dates_for_an_overnight_sleep():
+    ingestion = Mock()
+    settings = SimpleNamespace(
+        auto_update_date_range=1,
+        calendar_sync_days_back=7,
+        calendar_sync_days_ahead=1,
+    )
+    zone = pytz.timezone("America/Los_Angeles")
+    # 2026-10-05 08:00 UTC is 01:00 local, after the sleep crossed midnight.
+    jobs = IngestionJobs(
+        ingestion, settings, zone,
+        lambda: datetime(2026, 10, 5, 8, tzinfo=timezone.utc),
+    )
+    jobs.initial_sync()
+    assert [call.args[0] for call in ingestion.sync_intraday.call_args_list] == [
+        "2026-10-04", "2026-10-05",
+    ]
+    ingestion.sync_daily_group.assert_any_call("100d", "2026-10-04", "2026-10-05")

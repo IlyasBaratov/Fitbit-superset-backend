@@ -5,6 +5,7 @@ import json
 import logging
 import pytz
 import requests
+from app.core.exceptions import ProviderUnavailableError
 from app.providers.google_health.parsing import (
     parse_google_datapoint_timestamp,
     get_google_datapoint_date_string,
@@ -101,10 +102,14 @@ class GoogleHealthClient:
         # Google caps responses at ~5000 points per page regardless of pageSize, so we must
         # follow nextPageToken to avoid silently dropping data (e.g. HR samples earlier in the day).
         def _paginate(extra_params):
+            # Sleep Score needs the complete sleep/HR source window. A partial
+            # page sequence is unavailable and will be retried by the collector.
+            require_complete = data_type in {"sleep", "heart-rate"}
             all_points = []
             page_token = None
             first = True
-            for _ in range(50):  # safety cap; one day of HR is ~17k samples → ~4 pages
+            seen_tokens = set()
+            for _ in range(50):  # safety cap; observed ~38k HR samples/day need multiple pages
                 params = dict(extra_params)
                 params["pageSize"] = page_size
                 if page_token:
@@ -113,9 +118,13 @@ class GoogleHealthClient:
                     resp = self.request_google_data_points_list(
                         data_type, params=params, suppress_http_error_log=first
                     )
-                except requests.exceptions.HTTPError:
+                except requests.exceptions.HTTPError as error:
                     if first:
                         raise
+                    if require_complete:
+                        raise ProviderUnavailableError(
+                            f"Incomplete {data_type} pagination; retry the source window"
+                        ) from error
                     logger.warning(
                         "Pagination interrupted for %s; keeping %d points",
                         data_type,
@@ -124,11 +133,35 @@ class GoogleHealthClient:
                     break
                 first = False
                 if not isinstance(resp, dict):
+                    if require_complete:
+                        raise ProviderUnavailableError(
+                            f"Incomplete {data_type} response; retry the source window"
+                        )
                     break
-                all_points.extend(resp.get("dataPoints", []))
+                page_points = resp.get("dataPoints", [])
+                if not isinstance(page_points, list):
+                    if require_complete:
+                        raise ProviderUnavailableError(
+                            f"Invalid {data_type} page; retry the source window"
+                        )
+                    break
+                all_points.extend(page_points)
                 page_token = resp.get("nextPageToken")
                 if not page_token:
                     break
+                if page_token in seen_tokens:
+                    if require_complete:
+                        raise ProviderUnavailableError(
+                            f"Repeated {data_type} page token; retry the source window"
+                        )
+                    logger.warning("Repeated page token for %s", data_type)
+                    break
+                seen_tokens.add(page_token)
+            else:
+                if page_token and require_complete:
+                    raise ProviderUnavailableError(
+                        f"Exceeded {data_type} page limit; retry the source window"
+                    )
             return all_points
 
         points = None

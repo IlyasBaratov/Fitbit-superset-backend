@@ -328,7 +328,7 @@ def score_sleep_session(
     session: SleepSessionFeatures,
     tts: TimeToSoundSleep,
     sound_sleep_minutes: float | None = None,
-    sound_sleep_method: str = "unavailable_uncalibrated_hr_classifier",
+    sound_sleep_method: str = "unavailable_missing_epoch_data",
 ) -> SleepScoreResult:
     """Apply only the four fixed empirical v0.1 terms, without I/O or LLMs."""
     asleep = session.minutes_asleep
@@ -366,7 +366,7 @@ def score_sleep_session(
     }
     flags = list(dict.fromkeys(("experimental_formula", *session.flags, *tts.flags)))
     if sound_sleep_minutes is None:
-        flags.append("sound_sleep_unavailable_uncalibrated")
+        flags.append("sound_sleep_unavailable_missing_epoch_data")
     for name, value in (
         ("sleep_duration", shortfall),
         ("time_to_sound_sleep", tts.minutes),

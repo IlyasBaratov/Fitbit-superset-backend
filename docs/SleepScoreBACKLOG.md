@@ -39,7 +39,7 @@ goal must be configuration/profile inputs rather than permanent constants in the
 - [x] S4 Implement exact sleep efficiency, restlessness, interruptions and full awakenings
 - [x] S5 Implement Time to Sound Sleep v1
 - [x] S6 Implement high-resolution sleep-HR epoch generation
-- [ ] S7 Implement and calibrate Sound Sleep v1
+- [x] S7 Implement and calibrate Sound Sleep v1
 - [x] S8 Implement Sleep Score Emulator v0.1
 - [x] S9 Add versioned sleep-score schemas and endpoint
 - [x] S10 Add unit, calibration and route tests
@@ -116,12 +116,15 @@ Reference material used while designing this backlog:
 
 ## Calibration data currently available
 
-Owner clarification (2026-10-04): of the values listed below, only the seven
-`Google score` values are ground-truth targets for model fitting. TTS, Sound
-Sleep, restlessness, interruptions and full awakenings are contextual display
-observations, not public Google Health API fields or fitting targets. Production
-components must be derived from raw API records; the display values must never
-be written back as measurements or substituted for missing raw data.
+Owner clarification (2026-10-04): the seven `Google score` values are the only
+ground-truth targets for fitting the **v0.1 numeric score**. A subsequent owner
+authorization permits the seven app-displayed Sound Sleep minutes as separate
+experimental **S7 HR classifier** fitting targets. They are observations from
+the owner's app, not public Google Health API fields. TTS, restlessness,
+interruptions and full awakenings remain contextual display observations and
+are not fitting targets. Production components must be derived from raw API
+records; display values must never be written back as measurements or
+substituted for missing raw data.
 
 Sep 30 has a Google Sleep Score but no corresponding raw sleep session in the exported dataset. **Exclude
 Sep 30 from model fitting. Do not convert missing telemetry into zero sleep.** Missing data and zero are
@@ -493,7 +496,8 @@ Candidate rule:
 LowHR_t = minute_hr_t <= HR_med + alpha * robust_scale_hr
 ```
 
-`alpha` is **not known yet** and must be calibrated against Google-labeled Sound Sleep minutes.
+Google's `alpha` is unknown. The experimental emulator fit `alpha = 0.3`
+against six complete owner-observed app Sound Sleep minutes as described in S7.
 
 ### Candidate low-HR model B: nightly percentile
 
@@ -504,7 +508,9 @@ Qq = q-th percentile of valid sleeping minute_hr values
 LowHR_t = minute_hr_t <= Qq
 ```
 
-Learn `q` from calibration data rather than assuming 40% or any other value.
+The percentile candidate was tested on the same six complete nights; its best
+grid value was `q = 56`, with worse in-sample MAE than the robust model. It is
+not the active rule or a claim about Google's threshold.
 
 ### Candidate steady-HR rule
 
@@ -517,7 +523,8 @@ rolling_MAD = median(abs(x - rolling_median) for x in window)
 SteadyHR_t = rolling_MAD <= beta
 ```
 
-`beta` is also a fitted parameter.
+The experimental emulator fit `beta = 0.75` BPM from the same six nights.
+Google's actual stability rule remains unknown.
 
 ### Parameter fitting
 
@@ -530,7 +537,7 @@ predicted_sound_i(alpha, beta)
 and fit parameters by minimizing:
 
 ```text
-MAE(alpha, beta) = mean(abs(predicted_sound_i - google_sound_i))
+MAE(alpha, beta) = mean(abs(predicted_sound_i - owner_app_observed_sound_i))
 ```
 
 For percentile model B, search over `q` plus `beta`.
@@ -730,6 +737,10 @@ The seven labeled sleep windows contain 8,553–12,824 raw `HeartRate_Intraday` 
 typically 23–25 samples per minute. The new identity-scoped read is limited to one 24-hour
 window and 20,000 rows without `GROUP BY`; the existing hourly public read is unchanged.
 Retention on any separate deployment remains to be checked there.
+Follow-up 2026-10-04: the Google collector now rejects incomplete paginated
+sleep and heart-rate source windows instead of persisting an unmarked partial
+page sequence. Scheduled collection retries the window on its next run; an
+outage beyond the automatic lookback still needs manual backfill.
 
 **Work**
 1. Inspect real Influx rows for `HeartRate_Intraday` during a known sleep interval.
@@ -753,6 +764,10 @@ asleep, 482 minutes in bed and 960 short-awakening seconds; its stage rows are
 available for interruption derivation.
 Follow-up: null or malformed short-awakening arrays do not create zero totals
 or partial interval series; those inputs remain unavailable.
+An overnight ingestion contract test follows a Google sleep session and its
+short-awakening interval plus HR samples from both local dates through the
+provider and Influx write preparation. All retain their original timestamps,
+session identity and raw `HeartRate_Intraday` measurement.
 
 Ensure `Sleep Summary` / `Sleep Levels` retain session ID, start/end, stage durations, short-awakening count and
 seconds/intervals. Prefer exact interval data over only summary counts.
@@ -812,13 +827,40 @@ and expose data-quality counts.
 
 ### S7 · Implement and calibrate Sound Sleep v1
 
-Partially implemented 2026-10-04: pure robust-threshold and percentile low-HR
-candidates, rolling five-minute MAD stability, and a research-only MAE helper
-accept explicit parameters and independently verified Sound Sleep targets.
-No low/steady-HR parameters have been fitted or enabled in production: the
-seven approved fitting targets contain only final Sleep Score labels, and
-v0.1 has no independently identifiable Sound Sleep weight. Sound Sleep and
-HR-qualified Stable Light remain unavailable until suitable evidence exists.
+Completed 2026-10-04 after the owner separately authorized app-displayed Sound
+Sleep minutes as S7 targets. The running `/api/health/sleep` supplied session
+summaries and 175 stage rows over eight local days; `/api/health/heart-rate`
+supplied 137 **hourly** HR rows and cannot support minute-level S7 fitting.
+The identity-scoped raw Influx query supplied 8,553–12,824 sleep-window HR
+samples per labeled night. Pure robust-threshold and percentile candidates use
+one-minute HR medians, short-awakening masks and internal AWAKE intervals.
+
+The research grid searched robust `alpha = -2..2` in 0.05 steps, percentile
+`q = 0..100` in 1-point steps, and five-minute rolling-MAD `beta = 0..10`
+BPM in 0.25 steps. The lower in-sample MAE came from the robust rule with
+`alpha = 0.3`, `beta = 0.75` BPM; these values are explicit in
+`sound-sleep-hr-v1-exp-2026-10-04`. Only **six** of seven owner nights had
+complete minute-HR inputs. Oct 1 had six sparse HR minutes, four of them
+affecting otherwise eligible epochs, so its S7 result is null and that night
+was excluded from the fit. No display value was substituted.
+
+| Wake date | S7 predicted min | Observed app min | Signed error min |
+|---|---:|---:|---:|
+| 2026-09-27 | 176 | 179 | -3 |
+| 2026-09-28 | 147 | 145 | +2 |
+| 2026-09-29 | 151 | 152 | -1 |
+| 2026-10-01 | unavailable | 155 | unavailable |
+| 2026-10-02 | 110 | 142 | -32 |
+| 2026-10-03 | 166 | 162 | +4 |
+| 2026-10-04 | 164 | 159 | +5 |
+
+Six-night in-sample MAE is **7.833 minutes**, median absolute error **3.5**,
+maximum absolute error **32**, and signed mean error **-4.167**. This is a weak
+fit on a tiny reused sample, not validated accuracy or Google's algorithm.
+The percentile alternative had in-sample MAE 12.5 minutes. The classifier's
+exact HR criteria remain proprietary/unknown. The Sound Sleep component has
+no v0.1 numeric-score weight. HR-qualified Stable Light for TTS remains
+provisional; future real nights and a holdout set must test both rules.
 
 Implement both robust-threshold and percentile low-HR candidates plus rolling-MAD stability. Grid-search
 parameters against labeled Sound Sleep minutes. Keep calibration code/test tooling separate from production
@@ -877,9 +919,10 @@ Minimum tests:
 Completed 2026-10-04: `docs/HEALTH_API.md` documents the v0.1 formula,
 configuration, response fields, confidence labels, missing-data rules,
 unweighted components and in-sample calibration errors. Google-proprietary
-thresholds and weights remain unknown. S7 calibration and S12 collection
-remain open; later real labeled nights must support independent Sound Sleep
-and Stable Light validation plus a held-out score evaluation.
+thresholds and weights remain unknown. S7 now has a separate experimental
+six-night in-sample classifier fit to owner-observed Sound Sleep minutes; S12
+collection remains open. Later real labeled nights must support independent
+Sound Sleep and Stable Light validation plus a held-out score evaluation.
 
 Put formulas and constants in API docs. State clearly that the score is experimental, user-specific calibration
 is small, Google internals are proprietary, and changes require a new model version.

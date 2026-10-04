@@ -16,14 +16,20 @@ from app.scores.sleep import (
     score_sleep_session,
     time_to_sound_sleep,
 )
-from app.scores.sleep_hr import sleep_hr_epochs
+from app.scores.sleep_hr import (
+    SOUND_SLEEP_MODEL_VERSION,
+    SOUND_SLEEP_PARAMETERS,
+    sleep_hr_epochs,
+    sound_sleep_candidate,
+)
 
 
 CAVEATS = [
     "This is an experimental emulator, not the proprietary Google/Fitbit Sleep Score.",
     "Only seven owner nights were used for the v0.1 empirical coefficients; in-sample error is not validated accuracy.",
     "Sound Sleep and Full Awakenings have no independent v0.1 score weight.",
-    "Sound Sleep and HR-qualified Stable Light are unavailable until classifier thresholds are validated.",
+    "Sound Sleep uses an experimental six-night in-sample HR fit; its error is not validated accuracy.",
+    "HR-qualified Stable Light for Time to Sound Sleep remains provisional.",
 ]
 COMPONENT_NAMES = (
     "duration", "time_to_sound_sleep", "sound_sleep", "restlessness",
@@ -96,6 +102,7 @@ class SleepScoreReadService:
                     samples.append(HeartRateSample(moment, bpm))
                 session = replace(session, heart_rate_samples=tuple(samples))
                 epochs = sleep_hr_epochs(session)
+                sound = sound_sleep_candidate(epochs, SOUND_SLEEP_PARAMETERS)
                 coverage = sum(epoch.minutes for epoch in epochs if epoch.minute_hr is not None)
                 sparse = sum(epoch.minutes for epoch in epochs if epoch.minute_hr is None)
                 if not samples:
@@ -105,10 +112,18 @@ class SleepScoreReadService:
                     fallback_flag=("tts_approximation_no_hr" if not samples
                                    else "tts_stable_light_unvalidated"),
                 )
-                result = score_sleep_session(session, tts)
+                result = score_sleep_session(
+                    session, tts, sound.minutes,
+                    SOUND_SLEEP_MODEL_VERSION if sound.minutes is not None
+                    else "unavailable_missing_epoch_data",
+                )
                 components = result.components
                 components["sound_sleep"]["hr_coverage_minutes"] = coverage
                 components["sound_sleep"]["hr_sparse_minutes"] = sparse
+                components["sound_sleep"]["eligible_minutes"] = sound.eligible_minutes
+                components["sound_sleep"]["unknown_minutes"] = sound.unknown_minutes
+                if sound.minutes is not None:
+                    hr_flags.append("sound_sleep_experimental_in_sample")
                 output.append(SleepScoreDay(
                     date=wake_date, score=result.score, raw_score=result.raw_score,
                     sleep_efficiency=components["sleep_efficiency"]["percent"],
