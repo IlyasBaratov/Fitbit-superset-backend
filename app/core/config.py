@@ -21,6 +21,9 @@ class Settings:
     influx_password: str = field(default="", repr=False)
     default_days: int = 7
     max_days: int = 90
+    sleep_goal_minutes: int = 420
+    sleep_profile_age: int | None = None
+    sleep_profile_gender: str | None = None
     cache_seconds: int = 300
     gemini_timeout_ms: int = 45000
     gemini_retry_attempts: int = 3
@@ -45,6 +48,10 @@ class Settings:
             raise ValueError("User, provider and device configuration are required")
         if not 1 <= self.default_days <= self.max_days <= 90:
             raise ValueError("Analysis days must satisfy 1 <= default <= maximum <= 90")
+        if self.sleep_goal_minutes <= 0:
+            raise ValueError("SLEEP_GOAL_MINUTES must be positive")
+        if self.sleep_profile_age is not None and self.sleep_profile_age <= 0:
+            raise ValueError("SLEEP_PROFILE_AGE must be positive")
         if self.gemini_timeout_ms <= 0:
             raise ValueError("GEMINI_TIMEOUT_MS must be positive")
         if self.gemini_retry_attempts < 1:
@@ -83,6 +90,12 @@ class Settings:
             influx_password=os.getenv("INFLUXDB_PASSWORD", ""),
             default_days=int(os.getenv("AI_DEFAULT_ANALYSIS_DAYS", "7")),
             max_days=int(os.getenv("AI_MAX_ANALYSIS_DAYS", "90")),
+            sleep_goal_minutes=int(os.getenv("SLEEP_GOAL_MINUTES", "420")),
+            sleep_profile_age=(
+                int(os.environ["SLEEP_PROFILE_AGE"])
+                if os.getenv("SLEEP_PROFILE_AGE") else None
+            ),
+            sleep_profile_gender=os.getenv("SLEEP_PROFILE_GENDER") or None,
             gemini_timeout_ms=int(os.getenv("GEMINI_TIMEOUT_MS", "45000")),
             gemini_retry_attempts=int(os.getenv("GEMINI_RETRY_ATTEMPTS", "3")),
             gemini_retry_base_ms=int(os.getenv("GEMINI_RETRY_BASE_MS", "250")),

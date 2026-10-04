@@ -41,7 +41,7 @@ goal must be configuration/profile inputs rather than permanent constants in the
 - [x] S6 Implement high-resolution sleep-HR epoch generation
 - [ ] S7 Implement and calibrate Sound Sleep v1
 - [x] S8 Implement Sleep Score Emulator v0.1
-- [ ] S9 Add versioned sleep-score schemas and endpoint
+- [x] S9 Add versioned sleep-score schemas and endpoint
 - [ ] S10 Add unit, calibration and route tests
 - [ ] S11 Document caveats, confidence and missing-data behavior
 - [ ] S12 Collect more Google-labeled nights and calibrate v0.2
@@ -835,6 +835,13 @@ Implement the current four-term formula and explicit formula version. Return raw
 component has no v0.1 weight.
 
 ### S9 · Add versioned sleep-score schemas and endpoint
+
+Completed 2026-10-04: authenticated `GET /api/health/sleep-score?period=Nd`
+uses the existing bounded period resolver, one main session per local wake
+date, and the same server-controlled identity-scoped storage. The response
+includes version, raw components, methods, flags, confidence and caveats;
+raw second-level HR never leaves the service. Absent required sleep inputs
+produce null scores and explanatory flags.
 
 Add `GET /api/health/sleep-score?period=Nd`, auth, bounded period, response version, components, flags,
 confidence and caveats. No LLM call.
