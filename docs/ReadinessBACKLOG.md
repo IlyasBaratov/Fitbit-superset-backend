@@ -78,10 +78,10 @@ weights to v0.3.
 
 ## Status
 
-- [ ] R1 Pure Readiness v0.3 model and unit tests
-- [ ] R2 Readiness service, schemas and authenticated API route
-- [ ] R3 Route/service integration tests, missing-data rules and calibration fixture
-- [ ] R4 Documentation, OpenAPI verification and final cleanup
+- [x] R1 Pure Readiness v0.3 model and unit tests
+- [x] R2 Readiness service, schemas and authenticated API route
+- [x] R3 Route/service integration tests, missing-data rules and calibration fixture
+- [x] R4 Documentation, OpenAPI verification and final cleanup
 
 ---
 
@@ -614,7 +614,7 @@ Write tests before implementation. At minimum:
 **Done when:** pure tests are green; `app/scores/readiness.py` has no import from `app.api`,
 `app.storage`, `fastapi`, provider clients, Gemini or requests/http libraries.
 
-Notes:
+Notes: done: added the pure date-based v0.3 model and test-first coverage for the formula, windows, missing values, SD floors, clamp and rounding. Deviations: none.
 
 ---
 
@@ -865,7 +865,7 @@ def readiness_score(
 **Done when:** endpoint boots, OpenAPI includes it, auth and period behavior match existing health
 routes, and no Gemini call is reachable from the service path.
 
-Notes:
+Notes: done: added the factual owner observation dataset, strict schemas, three-measurement read service, authenticated route and OpenAPI contract. Route smoke tests began in R2 to honor test-first; R3 expands them. Formula and contract deviations: none.
 
 ---
 
@@ -973,7 +973,7 @@ to Readiness v0.3. Readiness reads sleep minutes directly.
 green; the factual owner labels are available to runtime through the versioned observed-data source and are
 clearly distinguished from calculated v0.3 values; no synthetic readiness labels exist anywhere in the feature.
 
-Notes:
+Notes: done: captured factual stored HRV, RHR and Sleep Summary rows for deterministic route tests; covered observed precedence, unobserved calculation, missing and partial windows, thresholds, session selection, errors and strict schema. The non-blocking holdout report gives 17/65/50 against observed 13/65/53 (MAE 2.333); no coefficients were changed. SD-floor math is verified in pure tests, while the route test checks flag propagation because no flat factual 14-day baseline exists. Contract deviations: none.
 
 ---
 
@@ -1044,7 +1044,7 @@ insufficient-data day and one partial-window day.
 **Done when:** everything is green, docs contain the complete formula, OpenAPI exposes the route, no
 existing Sleep Score behavior changes, and there are no new dependencies.
 
-Notes:
+Notes: done: documented the complete v0.3 formula, missing-data/provenance contract, caveats and versioning; added README discovery and OpenAPI/docs consistency coverage. Verified observed, unobserved, insufficient and partial responses against the live local stored health data. Contract deviations: none.
 
 ---
 

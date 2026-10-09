@@ -1,0 +1,580 @@
+{
+  "description": "Factual snapshot of the owner identity-scoped local InfluxDB health rows for deterministic readiness integration tests. Only the fields needed by v0.3 are retained; no readiness labels are included.",
+  "source": "stored_health_influxdb_owner_data",
+  "timezone": "America/Los_Angeles",
+  "query_start": "2026-08-01T00:00:00+00:00",
+  "query_end_exclusive": "2026-10-09T00:00:00+00:00",
+  "measurements": {
+    "HRV": [
+      {
+        "time": "2026-08-10T07:00:00Z",
+        "dailyRmssd": 133.1
+      },
+      {
+        "time": "2026-08-20T07:00:00Z",
+        "dailyRmssd": 85.1
+      },
+      {
+        "time": "2026-08-21T07:00:00Z",
+        "dailyRmssd": 93.4
+      },
+      {
+        "time": "2026-08-26T07:00:00Z",
+        "dailyRmssd": 86.0
+      },
+      {
+        "time": "2026-08-27T07:00:00Z",
+        "dailyRmssd": 56.0
+      },
+      {
+        "time": "2026-08-28T07:00:00Z",
+        "dailyRmssd": 56.5
+      },
+      {
+        "time": "2026-08-29T07:00:00Z",
+        "dailyRmssd": 72.9
+      },
+      {
+        "time": "2026-08-30T07:00:00Z",
+        "dailyRmssd": 89.15
+      },
+      {
+        "time": "2026-08-31T07:00:00Z",
+        "dailyRmssd": 51.2
+      },
+      {
+        "time": "2026-09-01T07:00:00Z",
+        "dailyRmssd": 66.0
+      },
+      {
+        "time": "2026-09-02T07:00:00Z",
+        "dailyRmssd": 62.7
+      },
+      {
+        "time": "2026-09-03T07:00:00Z",
+        "dailyRmssd": 48.95
+      },
+      {
+        "time": "2026-09-04T07:00:00Z",
+        "dailyRmssd": 52.3
+      },
+      {
+        "time": "2026-09-05T07:00:00Z",
+        "dailyRmssd": 63.3
+      },
+      {
+        "time": "2026-09-06T07:00:00Z",
+        "dailyRmssd": 88.2
+      },
+      {
+        "time": "2026-09-07T07:00:00Z",
+        "dailyRmssd": 52.4
+      },
+      {
+        "time": "2026-09-08T07:00:00Z",
+        "dailyRmssd": 64.599
+      },
+      {
+        "time": "2026-09-09T07:00:00Z",
+        "dailyRmssd": 60.9
+      },
+      {
+        "time": "2026-09-10T07:00:00Z",
+        "dailyRmssd": 66.85
+      },
+      {
+        "time": "2026-09-11T07:00:00Z",
+        "dailyRmssd": 76.1
+      },
+      {
+        "time": "2026-09-12T07:00:00Z",
+        "dailyRmssd": 62.4
+      },
+      {
+        "time": "2026-09-13T07:00:00Z",
+        "dailyRmssd": 66.35
+      },
+      {
+        "time": "2026-09-14T07:00:00Z",
+        "dailyRmssd": 76.7
+      },
+      {
+        "time": "2026-09-23T07:00:00Z",
+        "dailyRmssd": 48.15
+      },
+      {
+        "time": "2026-09-24T07:00:00Z",
+        "dailyRmssd": 67.7
+      },
+      {
+        "time": "2026-09-25T07:00:00Z",
+        "dailyRmssd": 59.3
+      },
+      {
+        "time": "2026-09-26T07:00:00Z",
+        "dailyRmssd": 63.2
+      },
+      {
+        "time": "2026-09-27T07:00:00Z",
+        "dailyRmssd": 65.5
+      },
+      {
+        "time": "2026-09-28T07:00:00Z",
+        "dailyRmssd": 61.9
+      },
+      {
+        "time": "2026-09-29T07:00:00Z",
+        "dailyRmssd": 69.75
+      },
+      {
+        "time": "2026-10-01T07:00:00Z",
+        "dailyRmssd": 60.35
+      },
+      {
+        "time": "2026-10-02T07:00:00Z",
+        "dailyRmssd": 67.1
+      },
+      {
+        "time": "2026-10-03T07:00:00Z",
+        "dailyRmssd": 56.05
+      },
+      {
+        "time": "2026-10-04T07:00:00Z",
+        "dailyRmssd": 42.9
+      },
+      {
+        "time": "2026-10-05T07:00:00Z",
+        "dailyRmssd": 43.349
+      },
+      {
+        "time": "2026-10-06T07:00:00Z",
+        "dailyRmssd": 37.2
+      },
+      {
+        "time": "2026-10-07T07:00:00Z",
+        "dailyRmssd": 69.5
+      },
+      {
+        "time": "2026-10-08T07:00:00Z",
+        "dailyRmssd": 57.4
+      }
+    ],
+    "RestingHR": [
+      {
+        "time": "2026-08-09T07:00:00Z",
+        "value": 57.0
+      },
+      {
+        "time": "2026-08-10T07:00:00Z",
+        "value": 51.0
+      },
+      {
+        "time": "2026-08-20T07:00:00Z",
+        "value": 58.0
+      },
+      {
+        "time": "2026-08-21T07:00:00Z",
+        "value": 57.0
+      },
+      {
+        "time": "2026-08-26T07:00:00Z",
+        "value": 57.0
+      },
+      {
+        "time": "2026-08-27T07:00:00Z",
+        "value": 59.0
+      },
+      {
+        "time": "2026-08-28T07:00:00Z",
+        "value": 60.0
+      },
+      {
+        "time": "2026-08-29T07:00:00Z",
+        "value": 59.0
+      },
+      {
+        "time": "2026-08-30T07:00:00Z",
+        "value": 57.0
+      },
+      {
+        "time": "2026-08-31T07:00:00Z",
+        "value": 58.0
+      },
+      {
+        "time": "2026-09-01T07:00:00Z",
+        "value": 60.0
+      },
+      {
+        "time": "2026-09-02T07:00:00Z",
+        "value": 60.0
+      },
+      {
+        "time": "2026-09-03T07:00:00Z",
+        "value": 62.0
+      },
+      {
+        "time": "2026-09-04T07:00:00Z",
+        "value": 63.0
+      },
+      {
+        "time": "2026-09-05T07:00:00Z",
+        "value": 62.0
+      },
+      {
+        "time": "2026-09-06T07:00:00Z",
+        "value": 61.0
+      },
+      {
+        "time": "2026-09-07T07:00:00Z",
+        "value": 63.0
+      },
+      {
+        "time": "2026-09-08T07:00:00Z",
+        "value": 61.0
+      },
+      {
+        "time": "2026-09-09T07:00:00Z",
+        "value": 59.0
+      },
+      {
+        "time": "2026-09-10T07:00:00Z",
+        "value": 59.0
+      },
+      {
+        "time": "2026-09-12T07:00:00Z",
+        "value": 60.0
+      },
+      {
+        "time": "2026-09-13T07:00:00Z",
+        "value": 59.0
+      },
+      {
+        "time": "2026-09-14T07:00:00Z",
+        "value": 60.0
+      },
+      {
+        "time": "2026-09-23T07:00:00Z",
+        "value": 58.0
+      },
+      {
+        "time": "2026-09-24T07:00:00Z",
+        "value": 57.0
+      },
+      {
+        "time": "2026-09-25T07:00:00Z",
+        "value": 57.0
+      },
+      {
+        "time": "2026-09-26T07:00:00Z",
+        "value": 59.0
+      },
+      {
+        "time": "2026-09-27T07:00:00Z",
+        "value": 58.0
+      },
+      {
+        "time": "2026-09-28T07:00:00Z",
+        "value": 59.0
+      },
+      {
+        "time": "2026-09-29T07:00:00Z",
+        "value": 60.0
+      },
+      {
+        "time": "2026-10-01T07:00:00Z",
+        "value": 61.0
+      },
+      {
+        "time": "2026-10-02T07:00:00Z",
+        "value": 62.0
+      },
+      {
+        "time": "2026-10-03T07:00:00Z",
+        "value": 63.0
+      },
+      {
+        "time": "2026-10-04T07:00:00Z",
+        "value": 61.0
+      },
+      {
+        "time": "2026-10-05T07:00:00Z",
+        "value": 60.0
+      },
+      {
+        "time": "2026-10-06T07:00:00Z",
+        "value": 61.0
+      },
+      {
+        "time": "2026-10-07T07:00:00Z",
+        "value": 60.0
+      },
+      {
+        "time": "2026-10-08T07:00:00Z",
+        "value": 60.0
+      }
+    ],
+    "Sleep Summary": [
+      {
+        "time": "2026-09-05T07:43:00Z",
+        "startTime": "2026-09-05T07:43:00Z",
+        "endTime": "2026-09-05T15:18:00Z",
+        "SleepSessionId": "4014161662062515712",
+        "isMainSleep": "true",
+        "isProcessed": null,
+        "minutesAsleep": 447
+      },
+      {
+        "time": "2026-09-06T07:42:00Z",
+        "startTime": "2026-09-06T07:42:00Z",
+        "endTime": "2026-09-06T13:50:00Z",
+        "SleepSessionId": "4330804528554204376",
+        "isMainSleep": "true",
+        "isProcessed": null,
+        "minutesAsleep": 354
+      },
+      {
+        "time": "2026-09-07T09:22:00Z",
+        "startTime": "2026-09-07T09:22:00Z",
+        "endTime": "2026-09-07T12:51:00Z",
+        "SleepSessionId": "4715850960445491912",
+        "isMainSleep": "true",
+        "isProcessed": null,
+        "minutesAsleep": 208
+      },
+      {
+        "time": "2026-09-08T03:14:00Z",
+        "startTime": "2026-09-08T03:14:00Z",
+        "endTime": "2026-09-08T05:03:00Z",
+        "SleepSessionId": "8283509712592689896",
+        "isMainSleep": "true",
+        "isProcessed": null,
+        "minutesAsleep": 100
+      },
+      {
+        "time": "2026-09-08T09:06:00Z",
+        "startTime": "2026-09-08T09:06:00Z",
+        "endTime": "2026-09-08T16:48:00Z",
+        "SleepSessionId": "8028333594954225736",
+        "isMainSleep": "true",
+        "isProcessed": null,
+        "minutesAsleep": 447
+      },
+      {
+        "time": "2026-09-09T09:10:00Z",
+        "startTime": "2026-09-09T09:10:00Z",
+        "endTime": "2026-09-09T15:01:00Z",
+        "SleepSessionId": "2907391563584277208",
+        "isMainSleep": "true",
+        "isProcessed": null,
+        "minutesAsleep": 345
+      },
+      {
+        "time": "2026-09-10T02:41:00Z",
+        "startTime": "2026-09-10T02:41:00Z",
+        "endTime": "2026-09-10T03:13:00Z",
+        "SleepSessionId": "4740626292399000544",
+        "isMainSleep": "true",
+        "isProcessed": null,
+        "minutesAsleep": 27
+      },
+      {
+        "time": "2026-09-10T08:21:00Z",
+        "startTime": "2026-09-10T08:21:00Z",
+        "endTime": "2026-09-10T15:27:00Z",
+        "SleepSessionId": "8761534246853675744",
+        "isMainSleep": "true",
+        "isProcessed": null,
+        "minutesAsleep": 415
+      },
+      {
+        "time": "2026-09-11T07:53:00Z",
+        "startTime": "2026-09-11T07:53:00Z",
+        "endTime": "2026-09-11T14:00:00Z",
+        "SleepSessionId": "2740016416141633512",
+        "isMainSleep": "true",
+        "isProcessed": null,
+        "minutesAsleep": 358
+      },
+      {
+        "time": "2026-09-12T09:34:00Z",
+        "startTime": "2026-09-12T09:34:00Z",
+        "endTime": "2026-09-12T15:29:00Z",
+        "SleepSessionId": "6984080941964445888",
+        "isMainSleep": "true",
+        "isProcessed": null,
+        "minutesAsleep": 352
+      },
+      {
+        "time": "2026-09-13T07:45:00Z",
+        "startTime": "2026-09-13T07:45:00Z",
+        "endTime": "2026-09-13T13:58:00Z",
+        "SleepSessionId": "1286018361459198472",
+        "isMainSleep": "true",
+        "isProcessed": null,
+        "minutesAsleep": 368
+      },
+      {
+        "time": "2026-09-14T07:22:00Z",
+        "startTime": "2026-09-14T07:22:00Z",
+        "endTime": "2026-09-14T14:41:00Z",
+        "SleepSessionId": "7694228934333131688",
+        "isMainSleep": "true",
+        "isProcessed": null,
+        "minutesAsleep": 434
+      },
+      {
+        "time": "2026-09-23T08:53:00Z",
+        "startTime": "2026-09-23T08:53:00Z",
+        "endTime": "2026-09-23T15:00:00Z",
+        "SleepSessionId": "2340900584140235424",
+        "isMainSleep": "true",
+        "isProcessed": null,
+        "minutesAsleep": 363
+      },
+      {
+        "time": "2026-09-24T06:16:00Z",
+        "startTime": "2026-09-24T06:16:00Z",
+        "endTime": "2026-09-24T13:35:00Z",
+        "SleepSessionId": "2316752688830976672",
+        "isMainSleep": "true",
+        "isProcessed": null,
+        "minutesAsleep": 418
+      },
+      {
+        "time": "2026-09-25T05:39:00Z",
+        "startTime": "2026-09-25T05:39:00Z",
+        "endTime": "2026-09-25T12:56:00Z",
+        "SleepSessionId": "411339059723786168",
+        "isMainSleep": "true",
+        "isProcessed": null,
+        "minutesAsleep": 422
+      },
+      {
+        "time": "2026-09-26T09:16:00Z",
+        "startTime": "2026-09-26T09:16:00Z",
+        "endTime": "2026-09-26T15:45:00Z",
+        "SleepSessionId": "7043924069831357256",
+        "isMainSleep": "true",
+        "isProcessed": null,
+        "minutesAsleep": 384
+      },
+      {
+        "time": "2026-09-27T07:35:00Z",
+        "startTime": "2026-09-27T07:35:00Z",
+        "endTime": "2026-09-27T15:23:00Z",
+        "SleepSessionId": "3100200507792228696",
+        "isMainSleep": "true",
+        "isProcessed": true,
+        "minutesAsleep": 464
+      },
+      {
+        "time": "2026-09-28T07:26:00Z",
+        "startTime": "2026-09-28T07:26:00Z",
+        "endTime": "2026-09-28T14:01:00Z",
+        "SleepSessionId": "5502426048808285648",
+        "isMainSleep": "true",
+        "isProcessed": true,
+        "minutesAsleep": 388
+      },
+      {
+        "time": "2026-09-29T08:13:00Z",
+        "startTime": "2026-09-29T08:13:00Z",
+        "endTime": "2026-09-29T14:17:00Z",
+        "SleepSessionId": "8960484280959499832",
+        "isMainSleep": "true",
+        "isProcessed": true,
+        "minutesAsleep": 361
+      },
+      {
+        "time": "2026-10-01T06:54:00Z",
+        "startTime": "2026-10-01T06:54:00Z",
+        "endTime": "2026-10-01T13:41:00Z",
+        "SleepSessionId": "5017522109603759048",
+        "isMainSleep": "true",
+        "isProcessed": true,
+        "minutesAsleep": 399
+      },
+      {
+        "time": "2026-10-02T08:29:00Z",
+        "startTime": "2026-10-02T08:29:00Z",
+        "endTime": "2026-10-02T15:04:00Z",
+        "SleepSessionId": "5200130330453167264",
+        "isMainSleep": "true",
+        "isProcessed": true,
+        "minutesAsleep": 389
+      },
+      {
+        "time": "2026-10-03T08:22:00Z",
+        "startTime": "2026-10-03T08:22:00Z",
+        "endTime": "2026-10-03T16:52:00Z",
+        "SleepSessionId": "3533921383193227992",
+        "isMainSleep": "true",
+        "isProcessed": true,
+        "minutesAsleep": 409
+      },
+      {
+        "time": "2026-10-04T08:50:00Z",
+        "startTime": "2026-10-04T08:50:00Z",
+        "endTime": "2026-10-04T16:52:00Z",
+        "SleepSessionId": "766201473405358008",
+        "isMainSleep": "true",
+        "isProcessed": true,
+        "minutesAsleep": 437
+      },
+      {
+        "time": "2026-10-05T07:21:00Z",
+        "startTime": "2026-10-05T07:21:00Z",
+        "endTime": "2026-10-05T14:03:00Z",
+        "SleepSessionId": "8974276824762374928",
+        "isMainSleep": "true",
+        "isProcessed": true,
+        "minutesAsleep": 396
+      },
+      {
+        "time": "2026-10-06T10:29:00Z",
+        "startTime": "2026-10-06T10:29:00Z",
+        "endTime": "2026-10-06T17:27:00Z",
+        "SleepSessionId": "5655853509013650648",
+        "isMainSleep": "true",
+        "isProcessed": true,
+        "minutesAsleep": 383
+      },
+      {
+        "time": "2026-10-07T07:00:00Z",
+        "startTime": "2026-10-07T07:00:00Z",
+        "endTime": "2026-10-07T15:16:00Z",
+        "SleepSessionId": "4305797543152944312",
+        "isMainSleep": "true",
+        "isProcessed": true,
+        "minutesAsleep": 482
+      },
+      {
+        "time": "2026-10-08T00:36:00Z",
+        "startTime": "2026-10-08T00:36:00Z",
+        "endTime": "2026-10-08T01:53:00Z",
+        "SleepSessionId": "5519236869541467360",
+        "isMainSleep": "true",
+        "isProcessed": true,
+        "minutesAsleep": 71
+      },
+      {
+        "time": "2026-10-08T07:23:00Z",
+        "startTime": "2026-10-08T07:23:00Z",
+        "endTime": "2026-10-08T14:19:00Z",
+        "SleepSessionId": "6114342188225075984",
+        "isMainSleep": "true",
+        "isProcessed": true,
+        "minutesAsleep": 400
+      },
+      {
+        "time": "2026-10-08T16:57:00Z",
+        "startTime": "2026-10-08T16:57:00Z",
+        "endTime": "2026-10-08T17:40:00Z",
+        "SleepSessionId": "8404118982763559008",
+        "isMainSleep": "true",
+        "isProcessed": true,
+        "minutesAsleep": 25
+      }
+    ]
+  }
+}

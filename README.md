@@ -308,4 +308,4 @@ API code lives under `app/api`, Gemini/analytics under `app/ai`, and ingestion u
 
 Existing metric names, provider fields, identity tags, bulk window overlap and scheduling cadence remain compatible. Device signatures are saved only after acknowledged writes. Historical float/integer overrides belong to each repository instance. Corrected date handling uses local-midnight DST boundaries for Google filters and preserves UTC for Fitbit workout/TCX timestamps ending in Z.
 
-See [health read API](docs/HEALTH_API.md) for authenticated endpoints, including the experimental Sleep Score emulator, and [refactor contracts](docs/refactor_contracts.md) for the behavior baseline.
+See [health read API](docs/HEALTH_API.md) for authenticated endpoints, including the experimental Sleep Score emulator and the provenance-aware Readiness Score v0.3 endpoint, and [refactor contracts](docs/refactor_contracts.md) for the behavior baseline.
