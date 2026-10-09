@@ -2,6 +2,8 @@
 
 All routes require the existing `Authorization: Bearer <AI_API_TOKEN>` header. Identity always comes from USER_ID, HEALTH_API_PROVIDER and DEVICE_ID; clients cannot override it. These reads do not call Gemini.
 
+`info.version` in `/openapi.json` is the contract version. It changes exactly when the generated document changes: the minor for an addition (a path, an optional request field, a response field, a schema, an enum value), the major for removing or renaming anything or making a request field required, the patch for a change of descriptions only. A behaviour change that leaves the document alone keeps the version.
+
 | GET route | Measurements |
 | --- | --- |
 | /api/health/heart-rate | HeartRate_Intraday, RestingHR, HRV, HR zones |

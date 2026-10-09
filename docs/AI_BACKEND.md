@@ -65,6 +65,8 @@ Stop the Docker API first if running locally on the same port. Local database ac
 
 Interactive OpenAPI documentation: `http://127.0.0.1:8000/docs`. Use its Authorize control with the personal API token. No CORS origins are enabled by default.
 
+`info.version` in `/openapi.json` is the contract version. It changes exactly when the generated document changes: the minor for an addition (a path, an optional request field, a response field, a schema, an enum value), the major for removing or renaming anything or making a request field required, the patch for a change of descriptions only. A behaviour change that leaves the document alone keeps the version.
+
 All AI routes require `Authorization: Bearer <AI_API_TOKEN>`. The bearer token is **not** the Gemini key.
 
 | Method/path | Request | Purpose |
