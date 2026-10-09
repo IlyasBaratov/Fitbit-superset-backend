@@ -1,0 +1,18 @@
+{
+  "version": "readiness-observed-v1",
+  "description": "Real owner-provided Google Health Readiness observations, recorded as factual historical labels. These are not model inputs or synthetic examples.",
+  "observations": [
+    {"date": "2026-09-27", "score": 67, "source": "google_health_owner_observation", "observed": true},
+    {"date": "2026-09-28", "score": 56, "source": "google_health_owner_observation", "observed": true},
+    {"date": "2026-09-29", "score": 65, "source": "google_health_owner_observation", "observed": true},
+    {"date": "2026-09-30", "score": 62, "source": "google_health_owner_observation", "observed": true},
+    {"date": "2026-10-01", "score": 52, "source": "google_health_owner_observation", "observed": true},
+    {"date": "2026-10-02", "score": 61, "source": "google_health_owner_observation", "observed": true},
+    {"date": "2026-10-03", "score": 15, "source": "google_health_owner_observation", "observed": true},
+    {"date": "2026-10-04", "score": 22, "source": "google_health_owner_observation", "observed": true},
+    {"date": "2026-10-05", "score": 25, "source": "google_health_owner_observation", "observed": true},
+    {"date": "2026-10-06", "score": 13, "source": "google_health_owner_observation", "observed": true},
+    {"date": "2026-10-07", "score": 65, "source": "google_health_owner_observation", "observed": true},
+    {"date": "2026-10-08", "score": 53, "source": "google_health_owner_observation", "observed": true}
+  ]
+}

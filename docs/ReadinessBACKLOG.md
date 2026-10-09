@@ -79,7 +79,7 @@ weights to v0.3.
 ## Status
 
 - [x] R1 Pure Readiness v0.3 model and unit tests
-- [ ] R2 Readiness service, schemas and authenticated API route
+- [x] R2 Readiness service, schemas and authenticated API route
 - [ ] R3 Route/service integration tests, missing-data rules and calibration fixture
 - [ ] R4 Documentation, OpenAPI verification and final cleanup
 
@@ -865,7 +865,7 @@ def readiness_score(
 **Done when:** endpoint boots, OpenAPI includes it, auth and period behavior match existing health
 routes, and no Gemini call is reachable from the service path.
 
-Notes:
+Notes: done: added the factual owner observation dataset, strict schemas, three-measurement read service, authenticated route and OpenAPI contract. Route smoke tests began in R2 to honor test-first; R3 expands them. Formula and contract deviations: none.
 
 ---
 

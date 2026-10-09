@@ -19,5 +19,9 @@ def get_sleep_score(request: Request):
     return request.app.state.sleep_score
 
 
+def get_readiness_score(request: Request):
+    return request.app.state.readiness_score
+
+
 def get_calendar(request: Request):
     return request.app.state.calendar

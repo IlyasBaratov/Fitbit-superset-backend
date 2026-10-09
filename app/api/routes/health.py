@@ -3,10 +3,10 @@
 from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Request
 from app.core.security import authenticate
-from app.api.dependencies import get_health, get_sleep_score
+from app.api.dependencies import get_health, get_readiness_score, get_sleep_score
 from app.api.health_service import HEALTH_MEASUREMENTS
 from app.api.schemas.health import HealthQuery, HealthResponse, DevicesResponse
-from app.api.schemas.scores import SleepScoreResponse
+from app.api.schemas.scores import ReadinessScoreResponse, SleepScoreResponse
 from app.errors import APIError
 
 router = APIRouter()
@@ -38,6 +38,15 @@ def sleep_score(
     query: Annotated[HealthQuery, Query()],
     user=Depends(authenticate),
     service=Depends(get_sleep_score),
+):
+    return service.read(query.period)
+
+
+@router.get("/api/health/readiness-score", response_model=ReadinessScoreResponse)
+def readiness_score(
+    query: Annotated[HealthQuery, Query()],
+    user=Depends(authenticate),
+    service=Depends(get_readiness_score),
 ):
     return service.read(query.period)
 
