@@ -78,7 +78,7 @@ weights to v0.3.
 
 ## Status
 
-- [ ] R1 Pure Readiness v0.3 model and unit tests
+- [x] R1 Pure Readiness v0.3 model and unit tests
 - [ ] R2 Readiness service, schemas and authenticated API route
 - [ ] R3 Route/service integration tests, missing-data rules and calibration fixture
 - [ ] R4 Documentation, OpenAPI verification and final cleanup
@@ -614,7 +614,7 @@ Write tests before implementation. At minimum:
 **Done when:** pure tests are green; `app/scores/readiness.py` has no import from `app.api`,
 `app.storage`, `fastapi`, provider clients, Gemini or requests/http libraries.
 
-Notes:
+Notes: done: added the pure date-based v0.3 model and test-first coverage for the formula, windows, missing values, SD floors, clamp and rounding. Deviations: none.
 
 ---
 
