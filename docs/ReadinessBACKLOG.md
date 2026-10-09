@@ -81,7 +81,7 @@ weights to v0.3.
 - [x] R1 Pure Readiness v0.3 model and unit tests
 - [x] R2 Readiness service, schemas and authenticated API route
 - [x] R3 Route/service integration tests, missing-data rules and calibration fixture
-- [ ] R4 Documentation, OpenAPI verification and final cleanup
+- [x] R4 Documentation, OpenAPI verification and final cleanup
 
 ---
 
@@ -1044,7 +1044,7 @@ insufficient-data day and one partial-window day.
 **Done when:** everything is green, docs contain the complete formula, OpenAPI exposes the route, no
 existing Sleep Score behavior changes, and there are no new dependencies.
 
-Notes:
+Notes: done: documented the complete v0.3 formula, missing-data/provenance contract, caveats and versioning; added README discovery and OpenAPI/docs consistency coverage. Verified observed, unobserved, insufficient and partial responses against the live local stored health data. Contract deviations: none.
 
 ---
 
