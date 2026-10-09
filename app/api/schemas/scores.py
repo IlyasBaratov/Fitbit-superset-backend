@@ -83,7 +83,7 @@ class ReadinessComponents(BaseModel):
 class ReadinessScoreDay(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
     date: date
-    score: int | None = Field(default=None, ge=1, le=100)
+    score: int | None = Field(ge=1, le=100)
     source: Literal["observed_google_health", "calculated_v0.3", "insufficient"]
     confidence: Literal["observed_fact", "experimental", "experimental_partial", "insufficient"]
     observed_score: int | None = Field(default=None, ge=1, le=100)
